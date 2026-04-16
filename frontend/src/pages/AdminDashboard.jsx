@@ -246,10 +246,16 @@ const AdminDashboard = () => {
       const payload = { roll_no: sRoll, name: sName, section: sSection };
       if (sPassword) payload.password = sPassword;
 
-      await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      fetchStudents(); closeModals();
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || data.message || 'Save Failed', 'error');
+        return;
+      }
+      await fetchStudents();
+      closeModals();
       showToast(editingStudent ? 'Metadata Updated' : 'Entity Registered');
-    } catch (err) { showToast('Logic Error', 'error'); }
+    } catch (err) { showToast('Network Error: ' + err.message, 'error'); }
   };
 
   const handleDeleteStudent = async (id) => {
