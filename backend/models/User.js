@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
     
     // Student specific fields
     roll_no: { type: String, sparse: true, unique: true },
+    email: { type: String, sparse: true, unique: true },
     section: { type: String },
     course: { type: String },
     status: { type: String, default: 'Active' },
