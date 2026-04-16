@@ -1,0 +1,8 @@
+{
+  "name": "smart-quiz-root",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend",
+    "start": "cd backend && node server.js"
+  }
+}

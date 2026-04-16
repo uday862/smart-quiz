@@ -3,9 +3,10 @@ services:
     name: smart-quiz-platform
     env: node
     plan: free
-    # Enhanced build command for subdirectory projects
-    buildCommand: "npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend"
-    startCommand: "cd backend && node server.js"
+    # Simplified deployment using root package.json
+    buildCommand: "npm run build"
+    startCommand: "npm start"
+
 
     envVars:
       - key: NODE_ENV
