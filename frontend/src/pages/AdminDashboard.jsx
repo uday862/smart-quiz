@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import API_BASE_URL from '../config';
 import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Users, BookOpen, Clock, AlertTriangle, X, Trash2, Play, Square, AreaChart, Download, FileText, UserMinus, UserCheck, CheckCircle, RefreshCcw, Filter, ChevronRight, Send, HelpCircle, Edit3 } from 'lucide-react';
