@@ -3,11 +3,8 @@ services:
     name: smart-quiz-platform
     env: node
     plan: free
-    # Simplified deployment using root package.json
     buildCommand: "npm run build"
     startCommand: "npm start"
-
-
     envVars:
       - key: NODE_ENV
         value: production
@@ -15,5 +12,3 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: PORT
-        value: 5001
