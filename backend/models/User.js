@@ -7,9 +7,9 @@ const userSchema = new mongoose.Schema({
     
     // Student specific fields
     roll_no: { type: String, sparse: true, unique: true },
-    section: { type: String, enum: ['A', 'B', 'C'] },
+    section: { type: String },
     course: { type: String },
-    status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
+    status: { type: String, default: 'Active' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);
