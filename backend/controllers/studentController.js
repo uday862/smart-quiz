@@ -9,7 +9,15 @@ exports.createStudent = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password || 'default_password', salt);
         
-        const student = new User({ role: 'student', name, roll_no, section, course, password: hashedPassword });
+        const student = new User({ 
+            role: 'student', 
+            name, 
+            roll_no, 
+            section, 
+            course, 
+            password: hashedPassword,
+            email: roll_no ? `${roll_no}@student.com` : undefined
+        });
         await student.save();
         res.status(201).json({ message: 'Student created successfully', student });
     } catch (err) {
