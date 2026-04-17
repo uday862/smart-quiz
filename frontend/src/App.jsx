@@ -6,6 +6,7 @@ import Analytics from './pages/Analytics';
 import StudentDashboard from './pages/student/StudentDashboard';
 import StudentAttemptSummary from './pages/student/StudentAttemptSummary';
 import StudentCodeIDE from './pages/student/StudentCodeIDE';
+import StudentSQLIDE from './pages/student/StudentSQLIDE';
 import StudentReview from './pages/student/StudentReview';
 import StudentHistory from './pages/student/StudentHistory';
 import LoginPage from './pages/LoginPage';
@@ -85,6 +86,7 @@ function App() {
               <Route path="/reports" element={<StudentDashboard tab="Reports" />} />
               <Route path="/summary/:id" element={<StudentAttemptSummary />} />
               <Route path="/quiz/:id" element={<StudentCodeIDE />} />
+              <Route path="/sql/:id" element={<StudentSQLIDE />} />
               <Route path="/review/:id" element={<StudentReview />} />
               <Route path="/history" element={<StudentHistory />} />
             </Routes>

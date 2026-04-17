@@ -7,10 +7,17 @@ const examSchema = new mongoose.Schema({
     time_limit: { type: Number, required: true }, // in minutes
     attempt_limit: { type: Number, default: 1 },
     questions: [{
-        type: { type: String, enum: ['MCQ', 'Coding', 'Descriptive'], required: true },
+        type: { type: String, enum: ['MCQ', 'Coding', 'Descriptive', 'SQL'], required: true },
         text: { type: String, required: true },
         options: [{ type: String }], // for MCQ
-        correct_answer: { type: String }, // for MCQ
+        correct_answer: { type: String }, // for MCQ or SQL
+        sql_init: { type: String }, // Database schema initiation for SQL (Legacy)
+        sample_input: { type: String }, // Example table data shown to student
+        sample_output: { type: String }, // Example expected result shown to student
+        test_cases: [{
+            input: { type: String },
+            output: { type: String }
+        }],
         marks: { type: Number, default: 1 }
     }],
     allowedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Array of student IDs, empty means all

@@ -50,6 +50,11 @@ const AdminDashboard = () => {
   const [tTitle, setTTitle] = useState('');
   const [tDesc, setTDesc] = useState('');
   const [tJson, setTJson] = useState('');
+  const [tSqlInit, setTSqlInit] = useState('');
+  const [tSqlAns, setTSqlAns] = useState('');
+  const [tTestCases, setTTestCases] = useState([{ input: '', output: '' }]);
+  const [tSampleIn, setTSampleIn] = useState('');
+  const [tSampleOut, setTSampleOut] = useState('');
   const [tTime, setTTime] = useState(30);
   const [tAttempts, setTAttempts] = useState(1);
   const [tDayId, setTDayId] = useState('');
@@ -186,9 +191,19 @@ const AdminDashboard = () => {
     if (task.questions && task.questions[0]?.type === 'Coding') {
       setTaskType('Lab (Coding Problem)');
       setTDesc(task.questions[0].text);
+    } else if (task.questions && task.questions[0]?.type === 'SQL') {
+      setTaskType('SQL (Practice Environment)');
+      setTDesc(task.questions[0].text);
+      if (task.questions[0].test_cases && task.questions[0].test_cases.length > 0) {
+          setTTestCases(task.questions[0].test_cases);
+      } else {
+          setTTestCases([{ input: task.questions[0].sql_init || '', output: task.questions[0].correct_answer || '' }]);
+      }
+      setTSampleIn(task.questions[0].sample_input || '');
+      setTSampleOut(task.questions[0].sample_output || '');
     } else {
       setTaskType('Quiz (Multiple Choice)');
-      const formattedQuestions = task.questions.map(q => ({
+      const formattedQuestions = (task.questions || []).map(q => ({
         q: q.text, options: q.options, ans: q.correct_answer
       }));
       setTJson(JSON.stringify(formattedQuestions, null, 2));
@@ -285,7 +300,9 @@ const AdminDashboard = () => {
     try {
       let questions = [];
       if (taskType.includes('Lab')) {
-        questions = [{ type: 'Coding', text: tDesc }];
+        questions = [{ type: 'Coding', text: tDesc, marks: 1 }];
+      } else if (taskType.includes('SQL')) {
+        questions = [{ type: 'SQL', text: tDesc, test_cases: tTestCases, sample_input: tSampleIn, sample_output: tSampleOut, marks: 100 }];
       } else {
         const parsed = JSON.parse(tJson);
         const qArray = Array.isArray(parsed) ? parsed : [parsed];
@@ -354,7 +371,7 @@ const AdminDashboard = () => {
   const closeModals = () => {
     setShowStudentModal(false); setShowTaskModal(false); setShowDayModal(false);
     setEditingStudent(null); setEditingTask(null);
-    setSRoll(''); setSName(''); setSPassword(''); setTTitle(''); setTDesc(''); setTJson(''); setTAttempts(1); setTTime(30);
+    setSRoll(''); setSName(''); setSPassword(''); setTTitle(''); setTDesc(''); setTJson(''); setTTestCases([{ input: '', output: '' }]); setTSqlInit(''); setTSqlAns(''); setTSampleIn(''); setTSampleOut(''); setTAttempts(1); setTTime(30);
     setTAllowedUsers([]);
   };
 
@@ -579,6 +596,7 @@ const AdminDashboard = () => {
                   <select value={taskType} onChange={e => setTaskType(e.target.value)} className="input-field">
                     <option>Quiz (Multiple Choice)</option>
                     <option>Lab (Coding Problem)</option>
+                    <option>SQL (Practice Environment)</option>
                   </select>
                 </div>
               </div>
@@ -623,7 +641,32 @@ const AdminDashboard = () => {
                 </div>
               </div>
 
-              <textarea placeholder={taskType.includes('Lab') ? "Assessment requirements..." : "JSON Questions format..."} value={taskType.includes('Lab') ? tDesc : tJson} onChange={e => taskType.includes('Lab') ? setTDesc(e.target.value) : setTJson(e.target.value)} className="input-field" style={{ height: '150px', fontFamily: 'monospace' }} required />
+              {taskType.includes('SQL') ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <textarea placeholder="SQL Problem Statement (e.g. Find all users...)" value={tDesc} onChange={e => setTDesc(e.target.value)} className="input-field" style={{ height: '80px', fontFamily: 'sans-serif' }} required />
+                  <textarea placeholder="Sample Input Table (Visible to Student)&#10;e.g. users table:&#10;id | name&#10;1  | John" value={tSampleIn} onChange={e => setTSampleIn(e.target.value)} className="input-field" style={{ height: '80px', fontFamily: 'monospace' }} />
+                  <textarea placeholder="Sample Expected Output (Visible to Student)&#10;e.g. &#10;name&#10;John" value={tSampleOut} onChange={e => setTSampleOut(e.target.value)} className="input-field" style={{ height: '80px', fontFamily: 'monospace' }} />
+                  {tTestCases.map((tc, index) => (
+                      <div key={index} style={{ border: '1px solid #cbd5e1', padding: '1rem', borderRadius: '4px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                             <h4 style={{ margin: 0, color: '#334155' }}>Hidden Test Case {index + 1}</h4>
+                             {tTestCases.length > 1 && (
+                               <button type="button" onClick={() => setTTestCases(tTestCases.filter((_, i) => i !== index))} style={{ color: 'red', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 'bold' }}>Remove</button>
+                             )}
+                          </div>
+                          <textarea placeholder="Database Architecture / Inserts (HIDDEN)&#10;e.g. CREATE TABLE users...;" value={tc.input} onChange={e => {
+                              const newTc = [...tTestCases]; newTc[index].input = e.target.value; setTTestCases(newTc);
+                          }} className="input-field" style={{ height: '80px', fontFamily: 'monospace', borderLeft: '4px solid #ef4444' }} required />
+                          <textarea placeholder="Expected target: Valid SQL OR Literal JSON Array&#10;e.g. [{&quot;name&quot;: &quot;John&quot;}]" value={tc.output} onChange={e => {
+                              const newTc = [...tTestCases]; newTc[index].output = e.target.value; setTTestCases(newTc);
+                          }} className="input-field" style={{ height: '60px', fontFamily: 'monospace', borderLeft: '4px solid #ef4444' }} required />
+                      </div>
+                  ))}
+                  <button type="button" onClick={() => setTTestCases([...tTestCases, { input: '', output: '' }])} style={{ background: '#3b82f6', color: 'white', padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>+ Add Another Test Case</button>
+                </div>
+              ) : (
+                <textarea placeholder={taskType.includes('Lab') ? "Assessment requirements..." : "JSON Questions format..."} value={taskType.includes('Lab') ? tDesc : tJson} onChange={e => taskType.includes('Lab') ? setTDesc(e.target.value) : setTJson(e.target.value)} className="input-field" style={{ height: '150px', fontFamily: 'monospace' }} required />
+              )}
               
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingTask ? 'Update Assessment' : 'Launch Task'}</button>

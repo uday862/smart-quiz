@@ -107,7 +107,7 @@ const StudentDashboard = ({ tab }) => {
                        <div style={{ background: '#1a1a1a', height: '120px', borderRadius: '2px', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', border: '1px solid #000' }}>
                           <div style={{ color: '#ccc', fontSize: '0.75rem', fontWeight: 'bold' }}>QUIZ</div>
                           <div style={{ background: '#222', width: '100%', padding: '0.5rem', position: 'absolute', bottom: 0, left: 0, textAlign: 'center', color: 'white', fontWeight: 'bold', fontSize: '0.8rem', borderTop: '1px solid #444' }}>
-                            {task.questions && task.questions[0]?.type === 'Coding' ? 'LAB' : 'QUIZ'}
+                            {task.questions && task.questions[0]?.type === 'Coding' ? 'LAB' : task.questions && task.questions[0]?.type === 'SQL' ? 'SQL' : 'QUIZ'}
                           </div>
                           <div style={{ color: 'white' }}><BookOpen size={40} /></div>
                        </div>
@@ -120,17 +120,24 @@ const StudentDashboard = ({ tab }) => {
                          <div style={{ borderBottom: '1px solid #eee', marginBottom: '1rem' }}></div>
                        </div>
                        
-                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div style={{ color: isCompleted ? '#16a34a' : '#f36d44' }}><CheckCircle size={16} /></div>
                             <span style={{ color: isCompleted ? '#16a34a' : '#f36d44', fontWeight: 'bold' }}>
-                               {isCompleted ? `Completed (Score: ${att.score}/${task.questions?.length})` : 'Started'}
+                               {isCompleted ? (task.questions && task.questions[0]?.type === 'SQL' ? `Completed (Score: ${att.score}/100)` : `Completed (Score: ${att.score}/${task.questions?.length || 1})`) : 'Started'}
                             </span>
                             <span style={{ color: '#999', fontSize: '0.8rem' }}>on {new Date(task.createdAt).toLocaleDateString()}</span>
                          </div>
                          
                          <div style={{ display: 'flex', gap: '0.75rem' }}>
-                           {isCompleted ? (
+                           {task.questions && task.questions[0]?.type === 'SQL' ? (
+                               <button 
+                                 style={{ background: '#0e7490', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
+                                 onClick={() => navigate(`/student/sql/${task._id}`)}
+                               >
+                                 OPEN EDITOR
+                               </button>
+                           ) : isCompleted ? (
                               <button 
                                 style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
                                 onClick={() => navigate(`/student/summary/${task._id}`)}
@@ -198,10 +205,17 @@ const StudentDashboard = ({ tab }) => {
                     <tr key={att._id} style={{ borderBottom: '1px solid #eee' }}>
                       <td style={{ textAlign: 'center', padding: '1rem' }}>{idx + 1}</td>
                       <td style={{ fontWeight: 'bold', color: '#333' }}>{att.exam?.title}</td>
-                      <td style={{ textAlign: 'center', color: '#f36d44', fontWeight: 'bold' }}>{att.score} / {att.exam?.questions?.length}</td>
+                      <td style={{ textAlign: 'center', color: '#f36d44', fontWeight: 'bold' }}>
+                          {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `${att.score} / 100` : `${att.score} / ${att.exam?.questions?.length || 1}`}
+                      </td>
                       <td style={{ textAlign: 'center', color: '#777' }}>{new Date(att.updatedAt).toLocaleDateString()}</td>
                       <td style={{ textAlign: 'right', paddingRight: '2rem' }}>
-                         <button onClick={() => navigate(`/student/summary/${att.exam?._id}`)} style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer' }}>View Report</button>
+                         <button 
+                             onClick={() => navigate(att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `/student/sql/${att.exam?._id}` : `/student/summary/${att.exam?._id}`)} 
+                             style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer' }}
+                         >
+                             {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? 'Open Editor' : 'View Report'}
+                         </button>
                       </td>
                     </tr>
                   ))}
@@ -218,7 +232,12 @@ const StudentDashboard = ({ tab }) => {
                        <div style={{ color: '#16a34a' }}><CheckCircle size={20} /></div>
                        <div style={{ fontWeight: 'bold', color: '#333' }}>{att.exam?.title} (Completed)</div>
                     </div>
-                    <button style={{ background: '#f1f5f9', border: '1px solid #ddd', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer' }} onClick={() => navigate(`/student/summary/${att.exam?._id}`)}>Review Effort</button>
+                    <button 
+                        style={{ background: '#f1f5f9', border: '1px solid #ddd', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', color: att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? '#0e7490' : '#333' }} 
+                        onClick={() => navigate(att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `/student/sql/${att.exam?._id}` : `/student/summary/${att.exam?._id}`)}
+                    >
+                        {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? 'Open Editor' : 'Review Effort'}
+                    </button>
                  </div>
                ))}
             </div>
