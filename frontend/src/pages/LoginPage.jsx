@@ -81,7 +81,7 @@ const LoginPage = () => {
               className="input-field" 
               value={identifier}
               onChange={e => setIdentifier(e.target.value)}
-              placeholder={role === 'admin' ? 'Enter admin username' : 'e.g. FS-ELITE-001'}
+              placeholder={role === 'admin' ? 'Enter admin username' : 'Enter roll number (e.g. 23bd1a0527)'}
               required
             />
           </div>
