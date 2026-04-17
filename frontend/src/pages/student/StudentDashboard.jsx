@@ -105,7 +105,7 @@ const StudentDashboard = ({ tab }) => {
                     {/* Left Frame Box */}
                     <div style={{ width: '200px', flexShrink: 0, padding: '4px', background: '#ddd', borderRadius: '4px' }}>
                        <div style={{ background: '#1a1a1a', height: '120px', borderRadius: '2px', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', border: '1px solid #000' }}>
-                          <div style={{ color: '#ccc', fontSize: '0.75rem', fontWeight: 'bold' }}>FS-Elite-2027</div>
+                          <div style={{ color: '#ccc', fontSize: '0.75rem', fontWeight: 'bold' }}>QUIZ</div>
                           <div style={{ background: '#222', width: '100%', padding: '0.5rem', position: 'absolute', bottom: 0, left: 0, textAlign: 'center', color: 'white', fontWeight: 'bold', fontSize: '0.8rem', borderTop: '1px solid #444' }}>
                             {task.questions && task.questions[0]?.type === 'Coding' ? 'LAB' : 'QUIZ'}
                           </div>
@@ -158,11 +158,14 @@ const StudentDashboard = ({ tab }) => {
 
           {tab === 'Assignments' && (
              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                {days.map(day => (
+                {days.map(day => {
+                   const visibleTasks = day.tasks.filter(t => !t.allowedUsers || t.allowedUsers.length === 0 || t.allowedUsers.includes(user?.id));
+                   if (visibleTasks.length === 0) return null;
+                   return (
                    <div key={day._id}>
                       <h3 style={{ fontSize: '1.25rem', color: '#1a365d', fontWeight: 'bold', marginBottom: '1.25rem', borderBottom: '1px solid #ddd', paddingBottom: '0.5rem' }}>Day {day.dayNumber}: {day.title}</h3>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                         {day.tasks.map(task => (
+                         {visibleTasks.map(task => (
                            <div key={task._id} style={{ background: 'white', padding: '1rem 1.5rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #eee' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                  <BookOpen size={18} color="#777" />
@@ -173,7 +176,8 @@ const StudentDashboard = ({ tab }) => {
                          ))}
                       </div>
                    </div>
-                ))}
+                   )
+                })}
              </div>
           )}
 
