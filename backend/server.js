@@ -27,6 +27,11 @@ mongoose.connect(process.env.MONGO_URI)
         await mongoose.connection.collection('users').dropIndex('email_1');
         console.log('Dropped email_1 index to fix dup key errors');
     } catch(e) { /* might not exist or already dropped, ignore */ }
+    // Drop old unique index on dayNumber if it still exists
+    try {
+        await mongoose.connection.collection('days').dropIndex('dayNumber_1');
+        console.log('Dropped dayNumber_1 unique index to fix Add Module');
+    } catch(e) { /* already dropped or never existed */ }
     // Seed admin if not exists
     const User = require('./models/User');
     const bcrypt = require('bcryptjs');

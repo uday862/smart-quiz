@@ -10,6 +10,7 @@ router.post('/', async (req, res) => {
         await day.save();
         res.status(201).json(day);
     } catch (err) {
+        console.error('Day creation error:', err.message);
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 });
