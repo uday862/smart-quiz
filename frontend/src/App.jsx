@@ -9,6 +9,7 @@ import StudentCodeIDE from './pages/student/StudentCodeIDE';
 import StudentSQLIDE from './pages/student/StudentSQLIDE';
 import StudentReview from './pages/student/StudentReview';
 import StudentHistory from './pages/student/StudentHistory';
+import StudentJumbleQuiz from './pages/student/StudentJumbleQuiz';
 import LoginPage from './pages/LoginPage';
 import './App.css';
 
@@ -89,6 +90,7 @@ function App() {
               <Route path="/sql/:id" element={<StudentSQLIDE />} />
               <Route path="/review/:id" element={<StudentReview />} />
               <Route path="/history" element={<StudentHistory />} />
+              <Route path="/jumble/:id" element={<StudentJumbleQuiz />} />
             </Routes>
           </StudentLayout>
         } />

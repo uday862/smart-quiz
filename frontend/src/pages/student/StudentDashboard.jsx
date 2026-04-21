@@ -107,7 +107,7 @@ const StudentDashboard = ({ tab }) => {
                        <div style={{ background: '#1a1a1a', height: '120px', borderRadius: '2px', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', border: '1px solid #000' }}>
                           <div style={{ color: '#ccc', fontSize: '0.75rem', fontWeight: 'bold' }}>QUIZ</div>
                           <div style={{ background: '#222', width: '100%', padding: '0.5rem', position: 'absolute', bottom: 0, left: 0, textAlign: 'center', color: 'white', fontWeight: 'bold', fontSize: '0.8rem', borderTop: '1px solid #444' }}>
-                            {task.questions && task.questions[0]?.type === 'Coding' ? 'LAB' : task.questions && task.questions[0]?.type === 'SQL' ? 'SQL' : 'QUIZ'}
+                            {task.questions && (task.questions[0]?.type === 'SQL' ? 'SQL' : task.questions.some(q => q.type === 'Jumble') && task.questions.some(q => q.type === 'MCQ') ? 'MIXED' : task.questions[0]?.type === 'Coding' ? 'LAB' : task.questions[0]?.type === 'Jumble' ? 'JUMBLE' : 'QUIZ')}
                           </div>
                           <div style={{ color: 'white' }}><BookOpen size={40} /></div>
                        </div>
@@ -123,9 +123,18 @@ const StudentDashboard = ({ tab }) => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div style={{ color: isCompleted ? '#16a34a' : '#f36d44' }}><CheckCircle size={16} /></div>
-                            <span style={{ color: isCompleted ? '#16a34a' : '#f36d44', fontWeight: 'bold' }}>
-                               {isCompleted ? (task.questions && task.questions[0]?.type === 'SQL' ? `Completed (Score: ${att.score}/100)` : `Completed (Score: ${att.score}/${task.questions?.length || 1})`) : 'Started'}
-                            </span>
+                             <span style={{ color: isCompleted ? '#16a34a' : '#f36d44', fontWeight: 'bold' }}>
+                                {isCompleted
+                                  ? (() => {
+                                      const qType = task.questions?.[0]?.type;
+                                      const isMixed = task.questions?.some(q => q.type === 'MCQ') && task.questions?.some(q => q.type === 'Jumble');
+                                      const total = isMixed || qType === 'MCQ' || qType === 'Jumble'
+                                        ? task.questions?.reduce((s, q) => s + (q.marks || 1), 0)
+                                        : qType === 'SQL' ? 100 : task.questions?.length || 1;
+                                      return `Completed (Score: ${att.score}/${total})`;
+                                    })()
+                                  : 'Started'}
+                             </span>
                             <span style={{ color: '#999', fontSize: '0.8rem' }}>on {new Date(task.createdAt).toLocaleDateString()}</span>
                          </div>
                          
@@ -137,6 +146,13 @@ const StudentDashboard = ({ tab }) => {
                                >
                                  OPEN EDITOR
                                </button>
+                            ) : (task.questions && (task.questions[0]?.type === 'Jumble' || (task.questions.some(q => q.type === 'Jumble') && task.questions.some(q => q.type === 'MCQ')))) ? (
+                                <button
+                                  style={{ background: '#7c3aed', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
+                                  onClick={() => navigate(`/student/jumble/${task._id}`)}
+                                >
+                                  {isCompleted ? 'VIEW RESULT' : task.questions.some(q => q.type === 'MCQ') ? 'START MIXED ▶' : 'ARRANGE ↕'}
+                                </button>
                            ) : isCompleted ? (
                               <button 
                                 style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
@@ -210,12 +226,16 @@ const StudentDashboard = ({ tab }) => {
                       </td>
                       <td style={{ textAlign: 'center', color: '#777' }}>{new Date(att.updatedAt).toLocaleDateString()}</td>
                       <td style={{ textAlign: 'right', paddingRight: '2rem' }}>
-                         <button 
-                             onClick={() => navigate(att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `/student/sql/${att.exam?._id}` : `/student/summary/${att.exam?._id}`)} 
-                             style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer' }}
-                         >
-                             {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? 'Open Editor' : 'View Report'}
-                         </button>
+                          <button 
+                              onClick={() => navigate(
+                                att.exam?.questions?.[0]?.type === 'SQL' ? `/student/sql/${att.exam?._id}` :
+                                (att.exam?.questions?.some(q => q.type === 'Jumble')) ? `/student/jumble/${att.exam?._id}` :
+                                `/student/summary/${att.exam?._id}`
+                              )} 
+                              style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer' }}
+                          >
+                              {att.exam?.questions?.[0]?.type === 'SQL' ? 'Open Editor' : att.exam?.questions?.some(q => q.type === 'Jumble') ? 'Open Quiz' : 'View Report'}
+                          </button>
                       </td>
                     </tr>
                   ))}
@@ -236,7 +256,7 @@ const StudentDashboard = ({ tab }) => {
                         style={{ background: '#f1f5f9', border: '1px solid #ddd', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', color: att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? '#0e7490' : '#333' }} 
                         onClick={() => navigate(att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `/student/sql/${att.exam?._id}` : `/student/summary/${att.exam?._id}`)}
                     >
-                        {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? 'Open Editor' : 'Review Effort'}
+                        {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? 'Open Editor' : att.exam?.questions && att.exam.questions[0]?.type === 'Jumble' ? 'Open Jumble' : 'Review Effort'}
                     </button>
                  </div>
                ))}

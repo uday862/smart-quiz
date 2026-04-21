@@ -25,6 +25,7 @@ const AdminDashboard = () => {
   const [editingStudent, setEditingStudent] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [taskType, setTaskType] = useState('Quiz (Multiple Choice)');
+  const [tJumbleQuestions, setTJumbleQuestions] = useState([{ sentence: '', hint: '' }]);
   const [adminTab, setAdminTab] = useState('Days');
   const [days, setDays] = useState([]);
   const [reports, setReports] = useState([]);
@@ -162,15 +163,17 @@ const AdminDashboard = () => {
   const handeDayCreate = async (e) => {
     e.preventDefault();
     try {
-      await fetch(`${API_BASE_URL}/api/days`, {
+      const res = await fetch(`${API_BASE_URL}/api/days`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dayNumber: dNum, title: dTitle })
+        body: JSON.stringify({ dayNumber: String(dNum), title: dTitle })
       });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || data.message || 'Module creation failed', 'error'); return; }
       await fetchDays();
       setShowDayModal(false);
       setDNum(''); setDTitle('');
-      showToast('Infrastructure Updated');
-    } catch (err) { showToast('Failure to build module', 'error'); }
+      showToast('Module Created Successfully!');
+    } catch (err) { showToast('Network error: ' + err.message, 'error'); }
   };
 
   const handleOpenTaskForDay = (dayId) => {
@@ -201,6 +204,29 @@ const AdminDashboard = () => {
       }
       setTSampleIn(task.questions[0].sample_input || '');
       setTSampleOut(task.questions[0].sample_output || '');
+    } else if (task.questions && task.questions.some(q => q.type === 'Jumble')) {
+      const hasJumble = task.questions.some(q => q.type === 'Jumble');
+      const hasMCQ = task.questions.some(q => q.type === 'MCQ');
+      if (hasJumble && hasMCQ) {
+        // Mixed task
+        setTaskType('Mixed (Quiz + Jumble)');
+        const mcqQs = task.questions.filter(q => q.type === 'MCQ').map(q => ({ q: q.text, options: q.options, ans: q.correct_answer }));
+        const jumbleQs = task.questions.filter(q => q.type === 'Jumble').map(q => {
+          let answer = q.correct_answer;
+          try { answer = JSON.parse(q.correct_answer); } catch(e) {}
+          return { hint: q.text, keywords: q.words || [], answer: Array.isArray(answer) ? answer : [] };
+        });
+        setTJson(JSON.stringify({ mcq: mcqQs, jumble: jumbleQs }, null, 2));
+      } else {
+        // Pure Jumble (Keywords)
+        setTaskType('Jumble (Keywords)');
+        const jqs = task.questions.map(q => {
+          let answer = q.correct_answer;
+          try { answer = JSON.parse(q.correct_answer); } catch(e) {}
+          return { hint: q.text, keywords: q.words || [], answer: Array.isArray(answer) ? answer : [] };
+        });
+        setTJson(JSON.stringify(jqs, null, 2));
+      }
     } else {
       setTaskType('Quiz (Multiple Choice)');
       const formattedQuestions = (task.questions || []).map(q => ({
@@ -212,10 +238,34 @@ const AdminDashboard = () => {
   };
 
   const handleFillSample = () => {
-    if (taskType.includes('Quiz')) {
+    if (taskType.includes('Mixed')) {
+      const sample = {
+        mcq: [
+          { q: "Which keyword creates an object in Java?", options: ["class", "new", "this", "super"], ans: "new" },
+          { q: "What does OOP stand for?", options: ["Object Oriented Programming", "Open Object Process", "Ordered Output Protocol", "None"], ans: "Object Oriented Programming" },
+          { q: "Which data type stores true/false?", options: ["int", "char", "boolean", "String"], ans: "boolean" }
+        ],
+        jumble: [
+          { hint: "Form a valid Java class declaration:", keywords: ["Main", "class", "{", "}", "public"], answer: ["public", "class", "Main", "{", "}"] },
+          { hint: "Form a Java print statement:", keywords: ["\"Hello\"", "println", "System.out.", ";", "(", ")"], answer: ["System.out.", "println", "(", "\"Hello\"", ")", ";"] },
+          { hint: "Form a for-loop header:", keywords: ["int i=0", "i++", "i<10", "for", "(", ";", ";", ")"], answer: ["for", "(", "int i=0", ";", "i<10", ";", "i++", ")"] }
+        ]
+      };
+      setTJson(JSON.stringify(sample, null, 2));
+      setTTitle("Java Mixed Challenge");
+    } else if (taskType.includes('Jumble')) {
       const sample = [
-        { "q": "Which Java keyword is used to create an object?", "options": ["class", "new", "this", "super"], "ans": "new" },
-        { "q": "What is the default value of a boolean in Java?", "options": ["true", "false", "null", "0"], "ans": "false" }
+        { hint: "Form a valid Java class declaration:", keywords: ["Main", "class", "{", "}", "public"], answer: ["public", "class", "Main", "{", "}"] },
+        { hint: "Form a correct if-statement:", keywords: ["condition", "if", "(", ")", "{", "}"], answer: ["if", "(", "condition", ")", "{", "}"] },
+        { hint: "Form a Java print statement:", keywords: ["\"Hello\"", "println", "System.out.", ";", "(", ")"], answer: ["System.out.", "println", "(", "\"Hello\"", ")", ";"] }
+      ];
+      setTJson(JSON.stringify(sample, null, 2));
+      setTTitle("Java Syntax Keywords");
+    } else if (taskType.includes('Quiz')) {
+      const sample = [
+        { q: "Which Java keyword is used to create an object?", options: ["class", "new", "this", "super"], ans: "new" },
+        { q: "What is the default value of a boolean in Java?", options: ["true", "false", "null", "0"], ans: "false" },
+        { q: "Which method is the entry point of a Java program?", options: ["start()", "main()", "run()", "init()"], ans: "main()" }
       ];
       setTJson(JSON.stringify(sample, null, 2));
       setTTitle("Basic Java Fundamentals");
@@ -303,6 +353,32 @@ const AdminDashboard = () => {
         questions = [{ type: 'Coding', text: tDesc, marks: 1 }];
       } else if (taskType.includes('SQL')) {
         questions = [{ type: 'SQL', text: tDesc, test_cases: tTestCases, sample_input: tSampleIn, sample_output: tSampleOut, marks: 100 }];
+      } else if (taskType.includes('Jumble')) {
+        let jParsed;
+        try { jParsed = JSON.parse(tJson); } catch(e) { showToast('Invalid JSON — check Jumble format', 'error'); return; }
+        if (!Array.isArray(jParsed) || jParsed.length === 0) { showToast('Jumble JSON must be a non-empty array', 'error'); return; }
+        const invalid = jParsed.find(q => !Array.isArray(q.keywords) || !Array.isArray(q.answer) || q.keywords.length < 2 || q.answer.length < 2);
+        if (invalid) { showToast('Each Jumble needs "keywords" and "answer" arrays with 2+ items', 'error'); return; }
+        questions = jParsed.map(q => ({
+          type: 'Jumble',
+          text: q.hint || 'Arrange the keywords in the correct order:',
+          words: q.keywords,
+          correct_answer: JSON.stringify(q.answer),
+          marks: q.marks || 1
+        }));
+      } else if (taskType.includes('Mixed')) {
+        let mixedParsed;
+        try { mixedParsed = JSON.parse(tJson); } catch(e) { showToast('Invalid JSON — check Mixed format', 'error'); return; }
+        if (!mixedParsed.mcq && !mixedParsed.jumble) { showToast('Mixed JSON must have "mcq" and/or "jumble" keys', 'error'); return; }
+        const mcqQs = (mixedParsed.mcq || []).map(q => ({ type: 'MCQ', text: q.q || q.text, options: q.options, correct_answer: q.ans || q.correct_answer, marks: 1 }));
+        const jumbleQs = (mixedParsed.jumble || []).map(q => ({
+          type: 'Jumble',
+          text: q.hint || 'Arrange the keywords:',
+          words: q.keywords || [],
+          correct_answer: JSON.stringify(q.answer || []),
+          marks: q.marks || 1
+        }));
+        questions = [...mcqQs, ...jumbleQs];
       } else {
         const parsed = JSON.parse(tJson);
         const qArray = Array.isArray(parsed) ? parsed : [parsed];
@@ -321,8 +397,11 @@ const AdminDashboard = () => {
       if (res.ok) {
         fetchDays(); closeModals();
         showToast(editingTask ? 'Task Configuration Updated' : 'Topic Dispatched Successfully');
-      } else { showToast('Operation Rejected', 'error'); }
-    } catch (err) { showToast('JSON Format Breach - Please check syntax', 'error'); }
+      } else {
+        const errData = await res.json();
+        showToast(errData.error || errData.message || 'Operation Rejected', 'error');
+      }
+    } catch (err) { showToast('JSON Format Breach - Please check syntax: ' + err.message, 'error'); }
   };
 
   const getFilteredReports = () => {
@@ -373,6 +452,7 @@ const AdminDashboard = () => {
     setEditingStudent(null); setEditingTask(null);
     setSRoll(''); setSName(''); setSPassword(''); setTTitle(''); setTDesc(''); setTJson(''); setTTestCases([{ input: '', output: '' }]); setTSqlInit(''); setTSqlAns(''); setTSampleIn(''); setTSampleOut(''); setTAttempts(1); setTTime(30);
     setTAllowedUsers([]);
+    setTJumbleQuestions([{ sentence: '', hint: '' }]);
   };
 
   const handleDownloadReport = () => {
@@ -479,12 +559,20 @@ const AdminDashboard = () => {
                     <tr key={t._id} style={{ borderTop: '1px solid #f8fafc' }}>
                       <td style={{ paddingLeft: '1.5rem', fontWeight: 'bold' }}>{t.title}</td>
                       <td><span style={{ fontSize: '0.7rem', fontWeight: '900', color: t.status === 'running' ? '#16a34a' : '#ef4444', textTransform: 'uppercase' }}>{t.status}</span></td>
-                      <td style={{ textAlign: 'right', paddingRight: '1.5rem' }}>
-                        <div style={{ display: 'flex', gap: '1.25rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-                          <button onClick={() => handleShowPeople(t._id, t.title)} className="btn-icon" title="View Enrolled Results"><Users size={18} color="#f36d44" /></button>
-                          <button onClick={() => handleEditTask(t)} className="btn-icon" title="Edit Task Config"><Edit3 size={18} color="#64748b" /></button>
-                          {t.status === 'running' ? <Square onClick={() => handleStopTask(t._id)} size={18} style={{ cursor: 'pointer', color: '#ef4444' }} /> : <Play onClick={() => handleStartTask(t._id)} size={18} style={{ cursor: 'pointer', color: '#16a34a' }} />}
-                          <Trash2 onClick={() => handleDeleteTask(t._id)} size={18} style={{ cursor: 'pointer', color: '#ddd' }} />
+                          <td style={{ position: 'sticky', right: 0, background: 'white', zIndex: 10, textAlign: 'right', paddingRight: '2rem', minWidth: '280px' }}>
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', alignItems: 'center', overflowX: 'auto', whiteSpace: 'nowrap', padding: '0.25rem 0' }}>
+                          <button onClick={() => handleShowPeople(t._id, t.title)} className="btn-icon" title="View Results" style={{padding: '0.4rem'}}><Users size={20} color="#f36d44" /></button>
+                          <button onClick={() => handleEditTask(t)} className="btn-icon" title="Edit Config" style={{padding: '0.4rem'}}><Edit3 size={20} color="#64748b" /></button>
+                          {t.status === 'running' ? (
+                            <button onClick={() => handleStopTask(t._id)} title="Stop Task" style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '0.5rem 0.75rem', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: '⏹️ STOP', gap: '0.25rem' }}>
+                              <Square size={16} /> STOP
+                            </button>
+                          ) : (
+                            <button onClick={() => handleStartTask(t._id)} title="Launch for Students" style={{ background: 'linear-gradient(135deg, #7c3aed, #9333ea)', color: 'white', border: 'none', borderRadius: '8px', padding: '0.6rem 1rem', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(124,58,237,0.3)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <Play size={16} /> LAUNCH
+                            </button>
+                          )}
+                          <button onClick={() => handleDeleteTask(t._id)} title="Delete" style={{ color: '#ef4444', background: 'none', border: 'none', padding: '0.5rem', cursor: 'pointer' }}><Trash2 size={20} /></button>
                         </div>
                       </td>
                     </tr>
@@ -578,100 +666,265 @@ const AdminDashboard = () => {
 
       {showTaskModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '650px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-               <h2 style={{ fontWeight: '900', color: '#071125' }}>{editingTask ? 'Edit Task Configuration' : 'Dispatch Smart Task'}</h2>
+          <div className="modal-content" style={{ maxWidth: '850px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+
+            {/* Fixed Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5rem 1.5rem 1rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+               <h2 style={{ fontWeight: '900', color: '#071125', margin: 0 }}>{editingTask ? 'Edit Task Configuration' : 'Dispatch Smart Task'}</h2>
                <button onClick={handleFillSample} className="btn btn-outline" style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><HelpCircle size={14}/> Java Sample</button>
             </div>
-            <form onSubmit={handleTaskSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b' }}>MODULE SECTOR</label>
-                  <select value={tDayId} onChange={e => setTDayId(e.target.value)} className="input-field" required>
-                    {days.map(d => <option key={d._id} value={d._id}>Day {d.dayNumber}: {d.title}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b' }}>TASK CATEGORY</label>
-                  <select value={taskType} onChange={e => setTaskType(e.target.value)} className="input-field">
-                    <option>Quiz (Multiple Choice)</option>
-                    <option>Lab (Coding Problem)</option>
-                    <option>SQL (Practice Environment)</option>
-                  </select>
-                </div>
-              </div>
 
-              <input value={tTitle} onChange={e => setTTitle(e.target.value)} placeholder="Operation Headline (e.g. Java Arrays)" className="input-field" required />
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b' }}>TIME LIMIT (MINS)</label>
-                  <input type="number" value={tTime} onChange={e => setTTime(e.target.value)} className="input-field" required />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b' }}>MAX ATTEMPTS</label>
-                  <input type="number" value={tAttempts} onChange={e => setTAttempts(e.target.value)} className="input-field" required />
-                </div>
-              </div>
+            <form onSubmit={handleTaskSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
-              <div>
-                <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.5rem' }}>TARGET AUDIENCE (Empty = All Students)</label>
-                <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.5rem' }}>
-                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={tAllowedUsers.length === 0} 
-                        onChange={() => setTAllowedUsers([])}
-                      />
-                      <span style={{ fontWeight: 'bold' }}>All Students</span>
-                   </label>
-                   {students.map(s => (
-                     <label key={s._id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.2rem 0', cursor: 'pointer' }}>
-                        <input 
-                          type="checkbox" 
-                          checked={tAllowedUsers.includes(s._id)} 
-                          onChange={(e) => {
-                            if (e.target.checked) setTAllowedUsers([...tAllowedUsers, s._id]);
-                            else setTAllowedUsers(tAllowedUsers.filter(id => id !== s._id));
-                          }}
-                        />
-                        <span style={{ fontSize: '0.85rem' }}>{s.roll_no} - {s.name}</span>
+              {/* Scrollable Body */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b' }}>MODULE SECTOR</label>
+                    <select value={tDayId} onChange={e => setTDayId(e.target.value)} className="input-field" required>
+                      {days.map(d => <option key={d._id} value={d._id}>Day {d.dayNumber}: {d.title}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b' }}>TASK CATEGORY</label>
+                    <select value={taskType} onChange={e => setTaskType(e.target.value)} className="input-field">
+                      <option>Quiz (Multiple Choice)</option>
+                      <option>Lab (Coding Problem)</option>
+                      <option>SQL (Practice Environment)</option>
+                      <option>Jumble (Keywords)</option>
+                      <option>Mixed (Quiz + Jumble)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <input value={tTitle} onChange={e => setTTitle(e.target.value)} placeholder="Operation Headline (e.g. Java Arrays)" className="input-field" required />
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b' }}>TIME LIMIT (MINS)</label>
+                    <input type="number" value={tTime} onChange={e => setTTime(e.target.value)} className="input-field" required />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b' }}>MAX ATTEMPTS</label>
+                    <input type="number" value={tAttempts} onChange={e => setTAttempts(e.target.value)} className="input-field" required />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.5rem' }}>TARGET AUDIENCE (Empty = All Students)</label>
+                  <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.5rem' }}>
+                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={tAllowedUsers.length === 0} onChange={() => setTAllowedUsers([])} />
+                        <span style={{ fontWeight: 'bold' }}>All Students</span>
                      </label>
-                   ))}
+                     {students.map(s => (
+                       <label key={s._id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.2rem 0', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={tAllowedUsers.includes(s._id)}
+                            onChange={(e) => {
+                              if (e.target.checked) setTAllowedUsers([...tAllowedUsers, s._id]);
+                              else setTAllowedUsers(tAllowedUsers.filter(id => id !== s._id));
+                            }}
+                          />
+                          <span style={{ fontSize: '0.85rem' }}>{s.roll_no} - {s.name}</span>
+                       </label>
+                     ))}
+                  </div>
                 </div>
-              </div>
 
-              {taskType.includes('SQL') ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <textarea placeholder="SQL Problem Statement (e.g. Find all users...)" value={tDesc} onChange={e => setTDesc(e.target.value)} className="input-field" style={{ height: '80px', fontFamily: 'sans-serif' }} required />
-                  <textarea placeholder="Sample Input Table (Visible to Student)&#10;e.g. users table:&#10;id | name&#10;1  | John" value={tSampleIn} onChange={e => setTSampleIn(e.target.value)} className="input-field" style={{ height: '80px', fontFamily: 'monospace' }} />
-                  <textarea placeholder="Sample Expected Output (Visible to Student)&#10;e.g. &#10;name&#10;John" value={tSampleOut} onChange={e => setTSampleOut(e.target.value)} className="input-field" style={{ height: '80px', fontFamily: 'monospace' }} />
-                  {tTestCases.map((tc, index) => (
-                      <div key={index} style={{ border: '1px solid #cbd5e1', padding: '1rem', borderRadius: '4px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                             <h4 style={{ margin: 0, color: '#334155' }}>Hidden Test Case {index + 1}</h4>
-                             {tTestCases.length > 1 && (
-                               <button type="button" onClick={() => setTTestCases(tTestCases.filter((_, i) => i !== index))} style={{ color: 'red', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 'bold' }}>Remove</button>
-                             )}
-                          </div>
-                          <textarea placeholder="Database Architecture / Inserts (HIDDEN)&#10;e.g. CREATE TABLE users...;" value={tc.input} onChange={e => {
-                              const newTc = [...tTestCases]; newTc[index].input = e.target.value; setTTestCases(newTc);
-                          }} className="input-field" style={{ height: '80px', fontFamily: 'monospace', borderLeft: '4px solid #ef4444' }} required />
-                          <textarea placeholder="Expected target: Valid SQL OR Literal JSON Array&#10;e.g. [{&quot;name&quot;: &quot;John&quot;}]" value={tc.output} onChange={e => {
-                              const newTc = [...tTestCases]; newTc[index].output = e.target.value; setTTestCases(newTc);
-                          }} className="input-field" style={{ height: '60px', fontFamily: 'monospace', borderLeft: '4px solid #ef4444' }} required />
+                {taskType.includes('SQL') ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <textarea placeholder="SQL Problem Statement (e.g. Find all users...)" value={tDesc} onChange={e => setTDesc(e.target.value)} className="input-field" style={{ height: '80px', fontFamily: 'sans-serif' }} required />
+                    <textarea placeholder="Sample Input Table (Visible to Student)&#10;e.g. users table:&#10;id | name&#10;1  | John" value={tSampleIn} onChange={e => setTSampleIn(e.target.value)} className="input-field" style={{ height: '80px', fontFamily: 'monospace' }} />
+                    <textarea placeholder="Sample Expected Output (Visible to Student)&#10;e.g. &#10;name&#10;John" value={tSampleOut} onChange={e => setTSampleOut(e.target.value)} className="input-field" style={{ height: '80px', fontFamily: 'monospace' }} />
+                    {tTestCases.map((tc, index) => (
+                        <div key={index} style={{ border: '1px solid #cbd5e1', padding: '1rem', borderRadius: '4px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                               <h4 style={{ margin: 0, color: '#334155' }}>Hidden Test Case {index + 1}</h4>
+                               {tTestCases.length > 1 && (
+                                 <button type="button" onClick={() => setTTestCases(tTestCases.filter((_, i) => i !== index))} style={{ color: 'red', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 'bold' }}>Remove</button>
+                               )}
+                            </div>
+                            <textarea placeholder="Database Architecture / Inserts (HIDDEN)&#10;e.g. CREATE TABLE users...;" value={tc.input} onChange={e => {
+                                const newTc = [...tTestCases]; newTc[index].input = e.target.value; setTTestCases(newTc);
+                            }} className="input-field" style={{ height: '80px', fontFamily: 'monospace', borderLeft: '4px solid #ef4444' }} required />
+                            <textarea placeholder="Expected target: Valid SQL OR Literal JSON Array&#10;e.g. [{&quot;name&quot;: &quot;John&quot;}]" value={tc.output} onChange={e => {
+                                const newTc = [...tTestCases]; newTc[index].output = e.target.value; setTTestCases(newTc);
+                            }} className="input-field" style={{ height: '60px', fontFamily: 'monospace', borderLeft: '4px solid #ef4444' }} required />
+                        </div>
+                    ))}
+                    <button type="button" onClick={() => setTTestCases([...tTestCases, { input: '', output: '' }])} style={{ background: '#3b82f6', color: 'white', padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>+ Add Another Test Case</button>
+                  </div>
+                ) : taskType.includes('Jumble') ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+                    {/* Info Banner */}
+                    <div style={{ padding: '0.85rem 1rem', background: 'linear-gradient(135deg, #f5f3ff, #ede9fe)', border: '1px solid #c4b5fd', borderRadius: '10px', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: '1.5rem' }}>🔤</span>
+                      <div style={{ fontSize: '0.8rem', color: '#5b21b6' }}>
+                        <div style={{ fontWeight: '900', marginBottom: '0.35rem' }}>Jumble (Keywords) — Word Tile Quiz</div>
+                        <div style={{ opacity: 0.85, lineHeight: 1.5 }}>Students see scrambled keyword chips and click to arrange them in the correct order. Great for code syntax, sequences and vocabulary.</div>
                       </div>
-                  ))}
-                  <button type="button" onClick={() => setTTestCases([...tTestCases, { input: '', output: '' }])} style={{ background: '#3b82f6', color: 'white', padding: '0.5rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>+ Add Another Test Case</button>
-                </div>
-              ) : (
-                <textarea placeholder={taskType.includes('Lab') ? "Assessment requirements..." : "JSON Questions format..."} value={taskType.includes('Lab') ? tDesc : tJson} onChange={e => taskType.includes('Lab') ? setTDesc(e.target.value) : setTJson(e.target.value)} className="input-field" style={{ height: '150px', fontFamily: 'monospace' }} required />
-              )}
-              
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                    </div>
+
+                    {/* Sample JSON format */}
+                    <div style={{ background: '#1e1b4b', borderRadius: '8px', padding: '0.85rem 1rem', fontSize: '0.72rem', fontFamily: 'monospace', color: '#c4b5fd', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{`[
+  {
+    "hint": "Form a valid Java class declaration:",
+    "keywords": ["Main", "class", "{", "}", "public"],
+    "answer": ["public", "class", "Main", "{", "}"]
+  }
+]`}</div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <button type="button" onClick={() => {
+                        const sample = JSON.stringify([
+                          { hint: "Form a valid Java class declaration:", keywords: ["Main", "class", "{", "}", "public"], answer: ["public", "class", "Main", "{", "}"] },
+                          { hint: "Form the correct if-statement keyword order:", keywords: ["condition", "if", "(", ")", "{"], answer: ["if", "(", "condition", ")", "{"] }
+                        ], null, 2);
+                        setTJson(sample);
+                        setTTitle('Java Syntax Keywords');
+                        showToast('Sample Keywords JSON loaded!');
+                      }} style={{ background: 'linear-gradient(135deg,#7c3aed,#9333ea)', color: 'white', border: 'none', padding: '0.45rem 1.1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', boxShadow: '0 2px 8px rgba(124,58,237,0.35)' }}>
+                        📋 Load Sample
+                      </button>
+                    </div>
+
+                    <textarea
+                      placeholder={`Paste your JSON here...\n[\n  {\n    "hint": "Arrange these keywords:",\n    "keywords": ["B", "A", "C"],\n    "answer": ["A", "B", "C"]\n  }\n]`}
+                      value={tJson}
+                      onChange={e => setTJson(e.target.value)}
+                      className="input-field"
+                      style={{ height: '240px', fontFamily: 'monospace', fontSize: '0.8rem', borderLeft: '3px solid #7c3aed' }}
+                      required
+                    />
+
+                    {/* Live Preview */}
+                    {(() => {
+                      try {
+                        const parsed = JSON.parse(tJson);
+                        if (!Array.isArray(parsed) || parsed.length === 0) return null;
+                        return (
+                          <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', maxHeight: '260px', overflowY: 'auto' }}>
+                            <div style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg,#7c3aed,#5b21b6)', color: 'white', fontSize: '0.72rem', fontWeight: '900', letterSpacing: '0.5px' }}>🔤 KEYWORD PREVIEW — {parsed.length} question(s)</div>
+                            {parsed.map((q, qi) => (
+                              <div key={qi} style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #f1f5f9' }}>
+                                <div style={{ fontSize: '0.75rem', fontWeight: '900', color: '#5b21b6', marginBottom: '0.5rem' }}>Q{qi+1}: {q.hint}</div>
+                                <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginBottom: '0.3rem', textTransform: 'uppercase', fontWeight: '700' }}>Keyword Pool (scrambled):</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.6rem' }}>
+                                  {(q.keywords||[]).map((kw, ki) => <span key={ki} style={{ background: 'linear-gradient(135deg,#7c3aed,#9333ea)', color: 'white', padding: '0.25rem 0.65rem', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '700', boxShadow: '0 2px 5px rgba(124,58,237,0.25)' }}>{kw}</span>)}
+                                </div>
+                                <div style={{ fontSize: '0.65rem', color: '#16a34a', marginBottom: '0.3rem', textTransform: 'uppercase', fontWeight: '700' }}>✅ Correct Answer:</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                                  {(q.answer||[]).map((kw, ki) => <span key={ki} style={{ background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', padding: '0.25rem 0.65rem', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '700' }}>{ki+1}. {kw}</span>)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      } catch(e) { return null; }
+                    })()}
+                  </div>
+
+                ) : taskType.includes('Mixed') ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+                    {/* Info Banner */}
+                    <div style={{ padding: '0.85rem 1rem', background: 'linear-gradient(135deg, #fff7ed, #fef3c7)', border: '1px solid #fcd34d', borderRadius: '10px', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: '1.5rem' }}>🎯</span>
+                      <div style={{ fontSize: '0.8rem', color: '#92400e' }}>
+                        <div style={{ fontWeight: '900', marginBottom: '0.35rem' }}>Mixed (Quiz + Jumble) — Combined Question Task</div>
+                        <div style={{ opacity: 0.85, lineHeight: 1.5 }}>Combines MCQ quiz questions and keyword jumble questions in one task. Use a single JSON with <code style={{ background: '#fde68a', padding: '0 4px', borderRadius: '3px' }}>"mcq"</code> and <code style={{ background: '#fde68a', padding: '0 4px', borderRadius: '3px' }}>"jumble"</code> keys.</div>
+                      </div>
+                    </div>
+
+                    {/* Format reference */}
+                    <div style={{ background: '#1e1b4b', borderRadius: '8px', padding: '0.85rem 1rem', fontSize: '0.72rem', fontFamily: 'monospace', color: '#c4b5fd', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{`{
+  "mcq": [
+    { "q": "What does OOP stand for?", "options": ["A", "B", "C", "D"], "ans": "A" }
+  ],
+  "jumble": [
+    { "hint": "Form a Java print statement:", "keywords": ["\"Hello\"", "println", "System.out.", ";"], "answer": ["System.out.", "println", "\"Hello\"", ";"] }
+  ]
+}`}</div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <button type="button" onClick={() => {
+                        const sample = JSON.stringify({
+                          mcq: [
+                            { q: 'Which keyword creates an object in Java?', options: ['class', 'new', 'this', 'super'], ans: 'new' },
+                            { q: 'What is the output of: System.out.println(2+3)?', options: ['23', '5', 'error', 'null'], ans: '5' }
+                          ],
+                          jumble: [
+                            { hint: 'Form a valid Java print statement:', keywords: ['"Hello"', 'println', 'System.out.', ';', '(', ')'], answer: ['System.out.', 'println', '(', '"Hello"', ')', ';'] },
+                            { hint: 'Form the for-loop header:', keywords: ['int i=0', 'i++', 'i<10', 'for', '(', ')'], answer: ['for', '(', 'int i=0', 'i<10', 'i++', ')'] }
+                          ]
+                        }, null, 2);
+                        setTJson(sample);
+                        setTTitle('Java Mixed Challenge');
+                        showToast('Sample Mixed JSON loaded!');
+                      }} style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', border: 'none', padding: '0.45rem 1.1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', boxShadow: '0 2px 8px rgba(245,158,11,0.35)' }}>
+                        📋 Load Sample
+                      </button>
+                    </div>
+
+                    <textarea
+                      placeholder={`{ "mcq": [...], "jumble": [...] }`}
+                      value={tJson}
+                      onChange={e => setTJson(e.target.value)}
+                      className="input-field"
+                      style={{ height: '280px', fontFamily: 'monospace', fontSize: '0.8rem', borderLeft: '3px solid #f59e0b' }}
+                      required
+                    />
+
+                    {/* Live Preview for Mixed */}
+                    {(() => {
+                      try {
+                        const parsed = JSON.parse(tJson);
+                        const mcqList = parsed.mcq || [];
+                        const jumbleList = parsed.jumble || [];
+                        if (mcqList.length === 0 && jumbleList.length === 0) return null;
+                        return (
+                          <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', maxHeight: '280px', overflowY: 'auto' }}>
+                            <div style={{ padding: '0.5rem 1rem', background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontSize: '0.72rem', fontWeight: '900' }}>🎯 MIXED PREVIEW — {mcqList.length} MCQ + {jumbleList.length} Jumble</div>
+                            {mcqList.map((q, qi) => (
+                              <div key={`mcq-${qi}`} style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f1f5f9', background: '#fffbeb' }}>
+                                <span style={{ background: '#f59e0b', color: 'white', fontSize: '0.65rem', fontWeight: '900', padding: '0.1rem 0.4rem', borderRadius: '3px', marginRight: '0.5rem' }}>MCQ</span>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#1e293b' }}>{q.q}</span>
+                                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
+                                  {(q.options||[]).map((opt, oi) => <span key={oi} style={{ background: opt === q.ans ? '#d1fae5' : '#f1f5f9', border: '1px solid', borderColor: opt === q.ans ? '#86efac' : '#e2e8f0', color: opt === q.ans ? '#15803d' : '#64748b', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: opt === q.ans ? '700' : '500' }}>{opt === q.ans ? '✓ ' : ''}{opt}</span>)}
+                                </div>
+                              </div>
+                            ))}
+                            {jumbleList.map((q, qi) => (
+                              <div key={`jmb-${qi}`} style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f1f5f9', background: '#faf5ff' }}>
+                                <span style={{ background: '#7c3aed', color: 'white', fontSize: '0.65rem', fontWeight: '900', padding: '0.1rem 0.4rem', borderRadius: '3px', marginRight: '0.5rem' }}>JUMBLE</span>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#1e293b' }}>{q.hint}</span>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.4rem' }}>
+                                  {(q.keywords||[]).map((kw, ki) => <span key={ki} style={{ background: 'linear-gradient(135deg,#7c3aed,#9333ea)', color: 'white', padding: '0.2rem 0.55rem', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '700' }}>{kw}</span>)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      } catch(e) { return null; }
+                    })()}
+                  </div>
+
+                ) : (
+                  <textarea placeholder={taskType.includes('Lab') ? "Assessment requirements..." : "JSON Questions format..."} value={taskType.includes('Lab') ? tDesc : tJson} onChange={e => taskType.includes('Lab') ? setTDesc(e.target.value) : setTJson(e.target.value)} className="input-field" style={{ height: '150px', fontFamily: 'monospace' }} required />
+                )}
+
+              </div>{/* end scrollable body */}
+
+              {/* Fixed Footer Buttons — always visible */}
+              <div style={{ display: 'flex', gap: '1rem', padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', background: '#fff', flexShrink: 0 }}>
                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingTask ? 'Update Assessment' : 'Launch Task'}</button>
                  <button type="button" onClick={closeModals} className="btn" style={{ flex: 1 }}>Abort</button>
               </div>
+
             </form>
           </div>
         </div>
