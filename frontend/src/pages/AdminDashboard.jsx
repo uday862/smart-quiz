@@ -41,6 +41,13 @@ const AdminDashboard = () => {
   // Day Form states
   const [dNum, setDNum] = useState('');
   const [dTitle, setDTitle] = useState('');
+
+  // Module collapse / edit states
+  const [collapsedDays, setCollapsedDays] = useState(new Set());
+  const [editingDay, setEditingDay] = useState(null);
+  const [showEditDayModal, setShowEditDayModal] = useState(false);
+  const [dEditNum, setDEditNum] = useState('');
+  const [dEditTitle, setDEditTitle] = useState('');
   
   // Form states
   const [sRoll, setSRoll] = useState('');
@@ -284,6 +291,49 @@ const AdminDashboard = () => {
          showToast('Curriculum Day Restarted');
          setShowConfirmModal({ show: false });
        } catch(err) { showToast('Restart failed', 'error'); }
+    });
+  };
+
+  const handleDeleteDay = async (dayId) => {
+    confirmAction('Delete this entire module and ALL its tasks permanently?', async () => {
+      try {
+        await fetch(`${API_BASE_URL}/api/days/${dayId}`, { method: 'DELETE' });
+        fetchDays();
+        showToast('Module Deleted');
+        setShowConfirmModal({ show: false });
+      } catch(err) { showToast('Delete failed', 'error'); }
+    });
+  };
+
+  const handleOpenEditDay = (day) => {
+    setEditingDay(day);
+    setDEditNum(day.dayNumber);
+    setDEditTitle(day.title);
+    setShowEditDayModal(true);
+  };
+
+  const handleUpdateDay = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/days/${editingDay._id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dayNumber: String(dEditNum), title: dEditTitle })
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || data.message || 'Update failed', 'error'); return; }
+      fetchDays();
+      setShowEditDayModal(false);
+      setEditingDay(null);
+      showToast('Module Updated!');
+    } catch(err) { showToast('Update failed: ' + err.message, 'error'); }
+  };
+
+  const toggleDayCollapse = (dayId) => {
+    setCollapsedDays(prev => {
+      const next = new Set(prev);
+      if (next.has(dayId)) next.delete(dayId);
+      else next.add(dayId);
+      return next;
     });
   };
 
@@ -539,48 +589,73 @@ const AdminDashboard = () => {
       )}
 
       {adminTab === 'Days' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          {days.map(day => (
-            <div key={day._id} className="card" style={{ padding: '0', borderLeft: '5px solid #071125' }}>
-              <div style={{ padding: '1rem 1.5rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                   <div style={{ padding: '0.5rem', background: '#071125', color: 'white', borderRadius: '6px', fontWeight: 'bold' }}>{day.dayNumber}</div>
-                   <h3 style={{ fontWeight: '900', color: '#071125' }}>{day.title}</h3>
-                 </div>
-                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button onClick={() => handleOpenTaskForDay(day._id)} className="btn btn-primary" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Plus size={14}/> Add Task</button>
-                    <button onClick={() => handleRestartDay(day._id)} className="btn btn-outline" style={{ fontSize: '0.75rem' }}>Reset State</button>
-                 </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {days.map(day => {
+            const isCollapsed = collapsedDays.has(day._id);
+            return (
+            <div key={day._id} style={{ borderRadius: '12px', border: '1px solid #e2e8f0', borderLeft: '5px solid #071125', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', background: 'white', transition: 'box-shadow 0.2s' }}>
+              {/* Module Header */}
+              <div style={{ padding: '0.85rem 1.25rem', background: isCollapsed ? '#f8fafc' : 'linear-gradient(135deg,#071125,#1e3a5f)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'background 0.25s' }} onClick={() => toggleDayCollapse(day._id)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                  {/* Fold/Unfold Chevron */}
+                  <span style={{ fontSize: '0.8rem', color: isCollapsed ? '#071125' : 'white', transition: 'transform 0.25s', display: 'inline-block', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', fontWeight: '900' }}>▼</span>
+                  <div style={{ padding: '0.35rem 0.7rem', background: isCollapsed ? '#071125' : 'rgba(255,255,255,0.15)', color: 'white', borderRadius: '6px', fontWeight: '900', fontSize: '0.85rem', letterSpacing: '0.5px' }}>{day.dayNumber}</div>
+                  <h3 style={{ fontWeight: '900', color: isCollapsed ? '#071125' : 'white', margin: 0, fontSize: '0.95rem' }}>{day.title}</h3>
+                  <span style={{ fontSize: '0.65rem', fontWeight: '700', color: isCollapsed ? '#64748b' : 'rgba(255,255,255,0.6)', background: isCollapsed ? '#f1f5f9' : 'rgba(255,255,255,0.1)', padding: '0.15rem 0.5rem', borderRadius: '10px' }}>{(day.tasks||[]).length} tasks</span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }} onClick={e => e.stopPropagation()}>
+                  <button onClick={() => handleOpenTaskForDay(day._id)} style={{ background: 'linear-gradient(135deg,#f36d44,#e85d2f)', color: 'white', border: 'none', borderRadius: '7px', padding: '0.4rem 0.85rem', fontSize: '0.72rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Plus size={13}/> Add Task</button>
+                  <button onClick={() => handleOpenEditDay(day)} title="Edit Module" style={{ background: 'rgba(255,255,255,0.15)', color: isCollapsed ? '#064e8c' : 'white', border: isCollapsed ? '1px solid #cbd5e1' : '1px solid rgba(255,255,255,0.2)', borderRadius: '7px', padding: '0.4rem 0.75rem', fontSize: '0.72rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Edit3 size={13}/> Edit</button>
+                  <button onClick={() => handleDeleteDay(day._id)} title="Delete Module" style={{ background: '#fee2e2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '7px', padding: '0.4rem 0.75rem', fontSize: '0.72rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Trash2 size={13}/> Delete</button>
+                  <button onClick={() => handleRestartDay(day._id)} title="Reset State" style={{ background: 'rgba(255,255,255,0.1)', color: isCollapsed ? '#64748b' : 'rgba(255,255,255,0.8)', border: isCollapsed ? '1px solid #e2e8f0' : '1px solid rgba(255,255,255,0.2)', borderRadius: '7px', padding: '0.4rem 0.75rem', fontSize: '0.72rem', fontWeight: '700', cursor: 'pointer' }}>↺ Reset</button>
+                </div>
               </div>
-              <table style={{ width: '100%' }}>
-                <thead style={{ background: '#fff' }}><tr><th style={{ paddingLeft: '1.5rem', fontSize: '0.8rem', color: '#64748b' }}>TASK FILENAME</th><th style={{ fontSize: '0.8rem', color: '#64748b' }}>ENGAGEMENT</th><th style={{ textAlign: 'right', paddingRight: '1.5rem', fontSize: '0.8rem', color: '#64748b' }}>PROTOCOL</th></tr></thead>
-                <tbody>
-                  {(day.tasks || []).map(t => (
-                    <tr key={t._id} style={{ borderTop: '1px solid #f8fafc' }}>
-                      <td style={{ paddingLeft: '1.5rem', fontWeight: 'bold' }}>{t.title}</td>
-                      <td><span style={{ fontSize: '0.7rem', fontWeight: '900', color: t.status === 'running' ? '#16a34a' : '#ef4444', textTransform: 'uppercase' }}>{t.status}</span></td>
-                          <td style={{ position: 'sticky', right: 0, background: 'white', zIndex: 10, textAlign: 'right', paddingRight: '2rem', minWidth: '280px' }}>
-                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', alignItems: 'center', overflowX: 'auto', whiteSpace: 'nowrap', padding: '0.25rem 0' }}>
-                          <button onClick={() => handleShowPeople(t._id, t.title)} className="btn-icon" title="View Results" style={{padding: '0.4rem'}}><Users size={20} color="#f36d44" /></button>
-                          <button onClick={() => handleEditTask(t)} className="btn-icon" title="Edit Config" style={{padding: '0.4rem'}}><Edit3 size={20} color="#64748b" /></button>
-                          {t.status === 'running' ? (
-                            <button onClick={() => handleStopTask(t._id)} title="Stop Task" style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '0.5rem 0.75rem', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: '⏹️ STOP', gap: '0.25rem' }}>
-                              <Square size={16} /> STOP
-                            </button>
-                          ) : (
-                            <button onClick={() => handleStartTask(t._id)} title="Launch for Students" style={{ background: 'linear-gradient(135deg, #7c3aed, #9333ea)', color: 'white', border: 'none', borderRadius: '8px', padding: '0.6rem 1rem', fontWeight: 'bold', fontSize: '0.85rem', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(124,58,237,0.3)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                              <Play size={16} /> LAUNCH
-                            </button>
-                          )}
-                          <button onClick={() => handleDeleteTask(t._id)} title="Delete" style={{ color: '#ef4444', background: 'none', border: 'none', padding: '0.5rem', cursor: 'pointer' }}><Trash2 size={20} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+              {/* Tasks Table — collapsible */}
+              <div style={{ maxHeight: isCollapsed ? '0px' : '2000px', overflow: 'hidden', transition: 'max-height 0.35s cubic-bezier(0.4,0,0.2,1)' }}>
+                {(day.tasks || []).length === 0 ? (
+                  <div style={{ padding: '1.5rem 1.5rem', color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic', textAlign: 'center', borderTop: '1px solid #f1f5f9' }}>No tasks yet — click "Add Task" to get started</div>
+                ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ background: '#f8fafc' }}><tr>
+                    <th style={{ paddingLeft: '1.5rem', padding: '0.6rem 1.5rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '900', textAlign: 'left', letterSpacing: '0.5px' }}>TASK</th>
+                    <th style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '900', letterSpacing: '0.5px' }}>TYPE</th>
+                    <th style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '900', letterSpacing: '0.5px' }}>STATUS</th>
+                    <th style={{ textAlign: 'right', paddingRight: '1.5rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '900', letterSpacing: '0.5px' }}>ACTIONS</th>
+                  </tr></thead>
+                  <tbody>
+                    {(day.tasks || []).map(t => {
+                      const qType = t.questions?.[0]?.type;
+                      const typeLabel = qType === 'SQL' ? '🗄️ SQL' : t.questions?.some(q => q.type === 'Jumble') && t.questions?.some(q => q.type === 'MCQ') ? '🎯 Mixed' : qType === 'Coding' ? '💻 Lab' : qType === 'Jumble' ? '🔤 Jumble' : '📝 Quiz';
+                      return (
+                      <tr key={t._id} style={{ borderTop: '1px solid #f8fafc' }}>
+                        <td style={{ paddingLeft: '1.5rem', paddingTop: '0.75rem', paddingBottom: '0.75rem', fontWeight: '700', color: '#1e293b' }}>{t.title}</td>
+                        <td><span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#5b21b6', background: '#f5f3ff', padding: '0.2rem 0.5rem', borderRadius: '5px' }}>{typeLabel}</span></td>
+                        <td><span style={{ fontSize: '0.68rem', fontWeight: '900', color: t.status === 'running' ? '#16a34a' : '#ef4444', background: t.status === 'running' ? '#f0fdf4' : '#fff1f2', padding: '0.2rem 0.6rem', borderRadius: '5px', textTransform: 'uppercase' }}>{t.status}</span></td>
+                        <td style={{ textAlign: 'right', paddingRight: '1.25rem' }}>
+                          <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                            <button onClick={() => handleShowPeople(t._id, t.title)} className="btn-icon" title="View Results" style={{padding: '0.35rem'}}><Users size={18} color="#f36d44" /></button>
+                            <button onClick={() => handleEditTask(t)} className="btn-icon" title="Edit Task" style={{padding: '0.35rem'}}><Edit3 size={18} color="#64748b" /></button>
+                            {t.status === 'running' ? (
+                              <button onClick={() => handleStopTask(t._id)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '0.4rem 0.7rem', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                <Square size={14} /> STOP
+                              </button>
+                            ) : (
+                              <button onClick={() => handleStartTask(t._id)} style={{ background: 'linear-gradient(135deg, #7c3aed, #9333ea)', color: 'white', border: 'none', borderRadius: '7px', padding: '0.4rem 0.8rem', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', boxShadow: '0 2px 6px rgba(124,58,237,0.3)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                <Play size={14} /> LAUNCH
+                              </button>
+                            )}
+                            <button onClick={() => handleDeleteTask(t._id)} title="Delete Task" style={{ color: '#ef4444', background: 'none', border: 'none', padding: '0.35rem', cursor: 'pointer' }}><Trash2 size={18} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    )})}
+                  </tbody>
+                </table>
+                )}
+              </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 
@@ -935,13 +1010,36 @@ const AdminDashboard = () => {
           <div className="modal-content">
              <h2 style={{ marginBottom: '1.5rem', fontWeight: '900', color: '#071125' }}>Insert Curriculum Node</h2>
              <form onSubmit={handeDayCreate} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <input placeholder="Sector ID" value={dNum} onChange={e => setDNum(e.target.value)} className="input-field" required />
+                <input placeholder="Sector ID (e.g. 1, 2A, Day 5)" value={dNum} onChange={e => setDNum(e.target.value)} className="input-field" required />
                 <input placeholder="Sector Subject" value={dTitle} onChange={e => setDTitle(e.target.value)} className="input-field" required />
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                    <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Insert Node</button>
                    <button type="button" onClick={() => setShowDayModal(false)} className="btn" style={{ flex: 1 }}>Cancel</button>
                 </div>
              </form>
+          </div>
+        </div>
+      )}
+
+      {showEditDayModal && editingDay && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '440px' }}>
+            <h2 style={{ marginBottom: '0.5rem', fontWeight: '900', color: '#071125' }}>Edit Module</h2>
+            <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '1.5rem' }}>Update the sector ID or title for this module.</p>
+            <form onSubmit={handleUpdateDay} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+               <div>
+                 <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.4rem' }}>SECTOR ID</label>
+                 <input value={dEditNum} onChange={e => setDEditNum(e.target.value)} className="input-field" placeholder="e.g. 1, 2A, Day 5" required />
+               </div>
+               <div>
+                 <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.4rem' }}>MODULE TITLE</label>
+                 <input value={dEditTitle} onChange={e => setDEditTitle(e.target.value)} className="input-field" placeholder="Module title" required />
+               </div>
+               <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Changes</button>
+                  <button type="button" onClick={() => { setShowEditDayModal(false); setEditingDay(null); }} className="btn" style={{ flex: 1 }}>Cancel</button>
+               </div>
+            </form>
           </div>
         </div>
       )}
