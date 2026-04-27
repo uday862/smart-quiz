@@ -56,7 +56,7 @@ router.post('/start', async (req, res) => {
 router.put('/:id/submit', async (req, res) => {
     try {
         const { score, status, answers, flags } = req.body;
-        const attempt = await Attempt.findById(req.params.id);
+        const attempt = await Attempt.findById(req.params.id).populate('exam', 'title questions');
         
         attempt.score = score;
         attempt.status = status;
@@ -65,6 +65,24 @@ router.put('/:id/submit', async (req, res) => {
         attempt.submissions += 1;
         
         await attempt.save();
+
+        // Send score notification if completed
+        if (status === 'completed') {
+            try {
+                const Notification = require('../models/Notification');
+                const total = (attempt.exam?.questions || []).reduce((s, q) => s + (q.marks || 1), 0) || 1;
+                await Notification.create({
+                    student: attempt.student,
+                    type: 'score_updated',
+                    title: '🏆 Score Updated!',
+                    message: `You scored ${score}/${total} in "${attempt.exam?.title || 'Task'}". Check your Reports for details.`,
+                    examId: attempt.exam?._id,
+                    score,
+                    isRead: false
+                });
+            } catch (notifErr) { console.error('Score notif error:', notifErr.message); }
+        }
+
         res.json(attempt);
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });

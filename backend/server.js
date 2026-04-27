@@ -72,6 +72,8 @@ app.use('/api/students', require('./routes/studentRoutes'));
 app.use('/api/exams', require('./routes/examRoutes'));
 app.use('/api/attempts', require('./routes/attemptRoutes'));
 app.use('/api/days', require('./routes/dayRoutes'));
+app.use('/api/groups', require('./routes/groupRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
 
 const PORT = process.env.PORT || 5001;
 

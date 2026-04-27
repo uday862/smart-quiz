@@ -22,6 +22,7 @@ const examSchema = new mongoose.Schema({
         marks: { type: Number, default: 1 }
     }],
     allowedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Array of student IDs, empty means all
+    allowedGroups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Group' }], // Array of group IDs
     isDeleted: { type: Boolean, default: false }
 
 }, { timestamps: true });

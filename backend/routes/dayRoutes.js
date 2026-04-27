@@ -50,4 +50,26 @@ router.put('/:id/restart', async (req, res) => {
     }
 });
 
+// Update a day (edit module)
+router.put('/:id', async (req, res) => {
+    try {
+        const day = await Day.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+        if (!day) return res.status(404).json({ message: 'Day not found' });
+        res.json(day);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
+// Delete a day (and all its tasks)
+router.delete('/:id', async (req, res) => {
+    try {
+        await Day.findByIdAndDelete(req.params.id);
+        await Exam.deleteMany({ dayId: req.params.id });
+        res.json({ message: 'Module deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
 module.exports = router;

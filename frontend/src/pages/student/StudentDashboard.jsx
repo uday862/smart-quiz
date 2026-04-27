@@ -9,6 +9,8 @@ const StudentDashboard = ({ tab }) => {
   const [allAttempts, setAllAttempts] = useState([]);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [myGroupIds, setMyGroupIds] = useState([]);
+  const [expandedDays, setExpandedDays] = useState({});
 
 
   const fetchData = async () => {
@@ -35,6 +37,15 @@ const StudentDashboard = ({ tab }) => {
       const attRes = await fetch(`${API_BASE_URL}/api/attempts/student/${activeUser.id}?t=${now}`);
       const attRaw = await attRes.json();
       setAllAttempts(attRaw);
+
+      // Fetch groups to know which groups this student belongs to
+      try {
+        const grpRes = await fetch(`${API_BASE_URL}/api/groups`);
+        const grpData = await grpRes.json();
+        const myGrpIds = (grpData || []).filter(g => (g.members || []).some(m => (m._id || m) === activeUser.id)).map(g => g._id);
+        setMyGroupIds(myGrpIds);
+      } catch (e) { setMyGroupIds([]); }
+
     } catch (err) { console.error('Sync failed', err); } finally { setLoading(false); }
   };
 
@@ -56,13 +67,22 @@ const StudentDashboard = ({ tab }) => {
   useEffect(() => { fetchData(); }, []);
 
 
+  const isTaskAccessible = (task) => {
+    if (!user) return false;
+    const hasUserRestriction = (task.allowedUsers || []).length > 0;
+    const hasGroupRestriction = (task.allowedGroups || []).length > 0;
+    // No restriction = visible to all
+    if (!hasUserRestriction && !hasGroupRestriction) return true;
+    // Check by individual student ID (use String() to avoid ObjectId vs string mismatch)
+    if (hasUserRestriction && (task.allowedUsers || []).some(id => String(id) === String(user.id))) return true;
+    // Check by group membership
+    if (hasGroupRestriction && (task.allowedGroups || []).some(g => myGroupIds.some(mgId => String(mgId) === String(g._id || g)))) return true;
+    return false;
+  };
+
   const getActiveTasks = () => {
     if (!user) return [];
-    return days.flatMap(d => d.tasks.filter(t => {
-      const isRunning = t.status === 'running';
-      const isAllowed = !t.allowedUsers || t.allowedUsers.length === 0 || t.allowedUsers.includes(user.id);
-      return isRunning && isAllowed;
-    }));
+    return days.flatMap(d => d.tasks.filter(t => t.status === 'running' && isTaskAccessible(t)));
   };
   const getCompletedTasks = () => {
     const bestMap = new Map();
@@ -99,7 +119,7 @@ const StudentDashboard = ({ tab }) => {
               {getActiveTasks().length > 0 ? getActiveTasks().map(task => {
                 const att = getAttempt(task._id);
                 const isCompleted = att?.status === 'completed';
-                
+
                 return (
                   <div key={task._id} style={{ background: 'white', border: '1px solid #ddd', borderRadius: '4px', padding: '1.25rem', display: 'flex', gap: '1.5rem', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
                     {/* Left Frame Box */}
@@ -119,8 +139,7 @@ const StudentDashboard = ({ tab }) => {
                          <h2 style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#333', marginBottom: '0.5rem' }}>{task.title}</h2>
                          <div style={{ borderBottom: '1px solid #eee', marginBottom: '1rem' }}></div>
                        </div>
-                       
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <div style={{ color: isCompleted ? '#16a34a' : '#f36d44' }}><CheckCircle size={16} /></div>
                              <span style={{ color: isCompleted ? '#16a34a' : '#f36d44', fontWeight: 'bold' }}>
@@ -137,36 +156,17 @@ const StudentDashboard = ({ tab }) => {
                              </span>
                             <span style={{ color: '#999', fontSize: '0.8rem' }}>on {new Date(task.createdAt).toLocaleDateString()}</span>
                          </div>
-                         
                          <div style={{ display: 'flex', gap: '0.75rem' }}>
                            {task.questions && task.questions[0]?.type === 'SQL' ? (
-                               <button 
-                                 style={{ background: '#0e7490', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
-                                 onClick={() => navigate(`/student/sql/${task._id}`)}
-                               >
-                                 OPEN EDITOR
-                               </button>
+                               <button style={{ background: '#0e7490', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => navigate(`/student/sql/${task._id}`)}>OPEN EDITOR</button>
                             ) : (task.questions && (task.questions[0]?.type === 'Jumble' || (task.questions.some(q => q.type === 'Jumble') && task.questions.some(q => q.type === 'MCQ')))) ? (
-                                <button
-                                  style={{ background: '#7c3aed', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
-                                  onClick={() => navigate(`/student/jumble/${task._id}`)}
-                                >
+                                <button style={{ background: '#7c3aed', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => navigate(`/student/jumble/${task._id}`)}>
                                   {isCompleted ? 'VIEW RESULT' : task.questions.some(q => q.type === 'MCQ') ? 'START MIXED ▶' : 'ARRANGE ↕'}
                                 </button>
                            ) : isCompleted ? (
-                              <button 
-                                style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
-                                onClick={() => navigate(`/student/summary/${task._id}`)}
-                              >
-                                VIEW RESULT
-                              </button>
+                              <button style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => navigate(`/student/summary/${task._id}`)}>VIEW RESULT</button>
                             ) : (
-                               <button 
-                                 style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}
-                                 onClick={() => navigate(`/student/quiz/${task._id}`)}
-                               >
-                                 ATTEMPT
-                               </button>
+                               <button style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => navigate(`/student/quiz/${task._id}`)}>ATTEMPT</button>
                             )}
                           </div>
                         </div>
@@ -180,26 +180,40 @@ const StudentDashboard = ({ tab }) => {
           )}
 
           {tab === 'Assignments' && (
-             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {days.map(day => {
-                   const visibleTasks = day.tasks.filter(t => !t.allowedUsers || t.allowedUsers.length === 0 || t.allowedUsers.includes(user?.id));
+                   const visibleTasks = day.tasks.filter(t => isTaskAccessible(t));
                    if (visibleTasks.length === 0) return null;
+                   const isOpen = !!expandedDays[day._id];
                    return (
-                   <div key={day._id}>
-                      <h3 style={{ fontSize: '1.25rem', color: '#1a365d', fontWeight: 'bold', marginBottom: '1.25rem', borderBottom: '1px solid #ddd', paddingBottom: '0.5rem' }}>Day {day.dayNumber}: {day.title}</h3>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                         {visibleTasks.map(task => (
-                           <div key={task._id} style={{ background: 'white', padding: '1rem 1.5rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #eee' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                 <BookOpen size={18} color="#777" />
-                                 <div style={{ fontWeight: '500', color: '#333' }}>{task.title}</div>
-                              </div>
-                              <span style={{ fontSize: '0.7rem', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid #ddd', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{task.status}</span>
-                           </div>
-                         ))}
+                   <div key={day._id} style={{ background: 'white', border: '1px solid #ddd', borderRadius: '6px', overflow: 'hidden' }}>
+                      {/* Day Header — click to toggle */}
+                      <div
+                        onClick={() => setExpandedDays(prev => ({ ...prev, [day._id]: !prev[day._id] }))}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.9rem 1.25rem', cursor: 'pointer', background: isOpen ? '#f8fafc' : 'white', borderBottom: isOpen ? '1px solid #eee' : 'none', userSelect: 'none' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <span style={{ fontWeight: '700', color: '#1a365d', fontSize: '0.95rem' }}>Day {day.dayNumber}: {day.title}</span>
+                          <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#64748b', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: '700' }}>{visibleTasks.length} task{visibleTasks.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
                       </div>
+                      {/* Tasks — only shown when expanded */}
+                      {isOpen && (
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          {visibleTasks.map((task, idx) => (
+                            <div key={task._id} style={{ padding: '0.85rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx < visibleTasks.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                 <BookOpen size={16} color="#94a3b8" />
+                                 <div style={{ fontWeight: '600', color: '#333', fontSize: '0.9rem' }}>{task.title}</div>
+                               </div>
+                               <span style={{ fontSize: '0.68rem', color: task.status === 'running' ? '#16a34a' : '#94a3b8', fontWeight: '800', textTransform: 'uppercase', border: `1px solid ${task.status === 'running' ? '#bbf7d0' : '#e2e8f0'}`, padding: '0.2rem 0.5rem', borderRadius: '4px', background: task.status === 'running' ? '#f0fdf4' : '#f8fafc' }}>{task.status}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                    </div>
-                   )
+                   );
                 })}
              </div>
           )}
@@ -270,3 +284,18 @@ const StudentDashboard = ({ tab }) => {
 };
 
 export default StudentDashboard;
+
+// Helper: button style factory
+function actionBtnStyle(bg) {
+  return {
+    background: bg,
+    color: 'white',
+    border: 'none',
+    padding: '0.55rem 1.75rem',
+    borderRadius: '7px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    letterSpacing: '0.3px'
+  };
+}
