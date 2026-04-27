@@ -66,7 +66,7 @@ const AdminDashboard = () => {
   const [studentSearch, setStudentSearch] = useState('');
 
   /* ─── Module (Day) states ─── */
-  const [collapsedDays, setCollapsedDays] = useState(new Set());
+  const [expandedDays, setExpandedDays] = useState(new Set());
   const [showDayModal, setShowDayModal] = useState(false);
   const [showEditDayModal, setShowEditDayModal] = useState(false);
   const [editingDay, setEditingDay] = useState(null);
@@ -235,7 +235,7 @@ const AdminDashboard = () => {
   };
 
   const toggleDayCollapse = (dayId) => {
-    setCollapsedDays(prev => {
+    setExpandedDays(prev => {
       const next = new Set(prev);
       if (next.has(dayId)) next.delete(dayId); else next.add(dayId);
       return next;
@@ -620,7 +620,7 @@ const AdminDashboard = () => {
             </div>
           )}
           {days.map(day => {
-            const isCollapsed = collapsedDays.has(day._id);
+            const isCollapsed = !expandedDays.has(day._id);
             return (
               <div key={day._id} style={{ borderRadius: '12px', border: '1px solid #e2e8f0', borderLeft: '5px solid #071125', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', background: 'white' }}>
                 {/* Module Header */}
