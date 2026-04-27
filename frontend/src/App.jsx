@@ -14,6 +14,22 @@ import StudentProfile from './pages/student/StudentProfile';
 import LoginPage from './pages/LoginPage';
 import API_BASE_URL from './config';
 import './App.css';
+import SimpleChatbot from './pages/student/SimpleChatbot';
+import { Moon, Sun } from 'lucide-react';
+
+/* ─────────── Dark Mode Toggle ─────────── */
+const DarkModeToggle = () => {
+  const [isDark, setIsDark] = useState(() => document.body.classList.contains('dark-mode'));
+  const toggle = () => {
+    document.body.classList.toggle('dark-mode');
+    setIsDark(!isDark);
+  };
+  return (
+    <button onClick={toggle} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Toggle Dark Mode">
+      {isDark ? <Sun size={20} /> : <Moon size={20} />}
+    </button>
+  );
+};
 
 /* ─────────── Admin Layout ─────────── */
 const AdminLayout = ({ children }) => (
@@ -23,6 +39,7 @@ const AdminLayout = ({ children }) => (
       <ul className="nav-links">
         <li><Link to="/admin">Dashboard</Link></li>
         <li><Link to="/admin/analytics">Analytics</Link></li>
+        <li style={{ marginTop: 'auto', paddingTop: '2rem' }}><DarkModeToggle /></li>
         <li><Link to="/" onClick={() => { localStorage.removeItem('user'); }} style={{ color: 'var(--danger-color)', marginTop: '2rem' }}>Logout</Link></li>
       </ul>
     </nav>
@@ -166,6 +183,7 @@ const StudentLayout = ({ children }) => {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+          <DarkModeToggle />
           {user && <NotificationBell userId={user.id} />}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div style={{ width: 30, height: 30, borderRadius: '50%', background: user?.avatar_color || '#f36d44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '0.75rem', color: 'white' }}>
@@ -184,6 +202,7 @@ const StudentLayout = ({ children }) => {
       <main style={{ flex: 1, background: '#f5f7fa' }}>
         {children}
       </main>
+      {user && <SimpleChatbot userId={user.id} />}
     </div>
   );
 };

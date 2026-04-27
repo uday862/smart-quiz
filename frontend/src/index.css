@@ -179,3 +179,27 @@ td {
   color: #1e293b;
   margin-bottom: 2rem;
 }
+/* -- Dark Mode -- */
+body.dark-mode {
+  --bg-color: #0f172a;
+  --surface-color: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --border-color: #334155;
+}
+body.dark-mode .modal-content, 
+body.dark-mode .card,
+body.dark-mode .glass-panel,
+body.dark-mode .moodle-table,
+body.dark-mode .moodle-table td,
+body.dark-mode .moodle-table tr:nth-child(even),
+body.dark-mode input.input-field,
+body.dark-mode .page-title,
+body.dark-mode h1, body.dark-mode h2, body.dark-mode h3 {
+  background-color: var(--surface-color);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+body.dark-mode input.input-field {
+  background-color: #0f172a;
+}

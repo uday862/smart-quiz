@@ -49,6 +49,7 @@ const AdminDashboard = () => {
   const [days, setDays] = useState([]);
   const [reports, setReports] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [adminUsers, setAdminUsers] = useState([]);
   const [adminTab, setAdminTab] = useState('Days');
 
   /* ─── Toast ─── */
@@ -134,6 +135,11 @@ const AdminDashboard = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [newAdminPassword, setNewAdminPassword] = useState('');
 
+  /* ─── Create Admin Modal ─── */
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [newAdminUser, setNewAdminUser] = useState('');
+  const [newAdminPass, setNewAdminPass] = useState('');
+
   /* ══════════ Data Fetch ══════════ */
   const fetchStudents = async () => {
     try {
@@ -177,8 +183,16 @@ const AdminDashboard = () => {
     } catch (err) { console.error(err); }
   };
 
+  const fetchAdmins = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/admins`);
+      const data = await res.json();
+      setAdminUsers(Array.isArray(data) ? data : []);
+    } catch (err) { console.error(err); }
+  };
+
   const handleGlobalRefresh = () => {
-    fetchStudents(); fetchDays(); fetchReports(); fetchGroups();
+    fetchStudents(); fetchDays(); fetchReports(); fetchGroups(); fetchAdmins();
   };
 
   useEffect(() => { handleGlobalRefresh(); }, []);
@@ -540,6 +554,28 @@ const AdminDashboard = () => {
     } catch (err) { showToast('Update failed', 'error'); }
   };
 
+  const handleCreateAdmin = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/register-admin`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newAdminUser, password: newAdminPass })
+      });
+      const data = await res.json();
+      if(res.ok) { showToast('Admin created!'); fetchAdmins(); setShowAdminModal(false); setNewAdminUser(''); setNewAdminPass(''); }
+      else { showToast(data.message, 'error'); }
+    } catch(err) { showToast('Error', 'error'); }
+  };
+
+  const handleDeleteAdmin = (id) => {
+    confirmAction('Delete this Admin?', async () => {
+      try {
+        await fetch(`${API_BASE_URL}/api/auth/admins/${id}`, { method: 'DELETE' });
+        fetchAdmins(); showToast('Admin Deleted'); setShowConfirmModal({ show:false });
+      } catch(err) { showToast('Delete failed', 'error'); }
+    });
+  };
+
   /* ─── Sample filler ─── */
   const handleFillSample = () => {
     if (taskType.includes('Mixed')) {
@@ -602,7 +638,7 @@ const AdminDashboard = () => {
 
       {/* ─── Tab Nav ─── */}
       <div style={{ marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '2rem' }}>
-        {['Days', 'Students', 'Groups', 'Reports'].map(tab => (
+        {['Days', 'Students', 'Groups', 'Reports', 'Admins'].map(tab => (
           <button key={tab} onClick={() => setAdminTab(tab)}
             style={{ background: 'transparent', border: 'none', borderBottom: adminTab === tab ? '3px solid #f36d44' : 'none', padding: '0.75rem 0', fontWeight: 'bold', cursor: 'pointer', color: adminTab === tab ? '#f36d44' : '#64748b', fontSize: '1rem', transition: 'color 0.2s' }}>
             {tab.toUpperCase()}
@@ -856,6 +892,36 @@ const AdminDashboard = () => {
                     <td style={{ fontWeight: '900', color: '#f36d44' }}>{r.score} pts</td>
                     <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(r.createdAt).toLocaleString()}</td>
                   </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════ ADMINS TAB ══════════ */}
+      {adminTab === 'Admins' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, color: '#071125', fontWeight: '900' }}>Platform Administrators</h3>
+            <button onClick={() => setShowAdminModal(true)} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Plus size={16}/> Add Admin</button>
+          </div>
+          <div className="card" style={{ padding: 0 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ background: '#f8fafc' }}>
+                <tr><th style={{ padding: '1rem 1.25rem', textAlign: 'left', color: '#64748b' }}>NAME</th><th style={{ textAlign: 'center', color: '#64748b' }}>ROLE</th><th style={{ textAlign: 'right', paddingRight: '1.25rem', color: '#64748b' }}>ACTION</th></tr>
+              </thead>
+              <tbody>
+                {adminUsers.map(a => (
+                   <tr key={a._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                     <td style={{ padding: '1rem 1.25rem', fontWeight: 'bold' }}>
+                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}><Avatar name={a.name} color="#16a34a" size={32}/> {a.name}</div>
+                     </td>
+                     <td style={{ textAlign: 'center' }}><Badge color="#16a34a">Admin</Badge></td>
+                     <td style={{ textAlign: 'right', paddingRight: '1.25rem' }}>
+                        <button onClick={() => handleDeleteAdmin(a._id)} className="btn-icon" style={{ color: '#ef4444' }}><Trash2 size={16}/></button>
+                     </td>
+                   </tr>
                 ))}
               </tbody>
             </table>
@@ -1371,6 +1437,27 @@ const AdminDashboard = () => {
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Update Password</button>
                 <button type="button" onClick={() => setShowSettingsModal(false)} className="btn" style={{ flex: 1 }}>Cancel</button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Admin Creation Modal ─── */}
+      {showAdminModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <button className="modal-close" onClick={() => setShowAdminModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+            <h2 style={{ marginBottom: '1.5rem', fontWeight: '900' }}>Create Admin</h2>
+            <form onSubmit={handleCreateAdmin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+               <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b' }}>ADMIN USERNAME</label>
+                  <input className="input-field" value={newAdminUser} onChange={e => setNewAdminUser(e.target.value)} required />
+               </div>
+               <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b' }}>PASSWORD</label>
+                  <input type="password" className="input-field" value={newAdminPass} onChange={e => setNewAdminPass(e.target.value)} required />
+               </div>
+               <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>Create Admin User</button>
             </form>
           </div>
         </div>

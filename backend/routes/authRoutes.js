@@ -7,5 +7,7 @@ router.post('/register-admin', authController.registerAdmin);
 router.put('/update-password', authController.updatePassword);
 router.put('/update-profile', authController.updateProfile);
 
+router.get('/admins', authController.getAdmins);
+router.delete('/admins/:id', authController.deleteAdmin);
 
 module.exports = router;
