@@ -17,19 +17,7 @@ import './App.css';
 import SimpleChatbot from './pages/student/SimpleChatbot';
 import { Moon, Sun } from 'lucide-react';
 
-/* ─────────── Dark Mode Toggle ─────────── */
-const DarkModeToggle = () => {
-  const [isDark, setIsDark] = useState(() => document.body.classList.contains('dark-mode'));
-  const toggle = () => {
-    document.body.classList.toggle('dark-mode');
-    setIsDark(!isDark);
-  };
-  return (
-    <button onClick={toggle} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Toggle Dark Mode">
-      {isDark ? <Sun size={20} /> : <Moon size={20} />}
-    </button>
-  );
-};
+/* ─────────── Dark Mode Toggle Removed ─────────── */
 
 /* ─────────── Admin Layout ─────────── */
 const AdminLayout = ({ children }) => (
@@ -39,7 +27,6 @@ const AdminLayout = ({ children }) => (
       <ul className="nav-links">
         <li><Link to="/admin">Dashboard</Link></li>
         <li><Link to="/admin/analytics">Analytics</Link></li>
-        <li style={{ marginTop: 'auto', paddingTop: '2rem' }}><DarkModeToggle /></li>
         <li><Link to="/" onClick={() => { localStorage.removeItem('user'); }} style={{ color: 'var(--danger-color)', marginTop: '2rem' }}>Logout</Link></li>
       </ul>
     </nav>
@@ -159,6 +146,30 @@ const StudentLayout = ({ children }) => {
   const navigate = useNavigate();
   const path = location.pathname;
 
+  const [news, setNews] = useState('');
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState('');
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/announcements`)
+      .then(res => res.json())
+      .then(data => setNews(data.message || ''))
+      .catch(e => console.error(e));
+  }, []);
+
+  const handleFeedbackSubmit = async (e) => {
+    e.preventDefault();
+    if (!feedbackMsg.trim()) return;
+    try {
+      await fetch(`${API_BASE_URL}/api/feedback`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student: user?.id, message: feedbackMsg })
+      });
+      alert('Feedback submitted successfully. Thank you!');
+      setShowFeedback(false); setFeedbackMsg('');
+    } catch(e) { alert('Error submitting feedback'); }
+  };
+
   const navLink = (to, label) => ({
     style: {
       color: 'white', textDecoration: 'none',
@@ -180,10 +191,10 @@ const StudentLayout = ({ children }) => {
             <Link to="/student/completed" {...navLink('/student/completed', 'Completed Tasks')}>Completed</Link>
             <Link to="/student/reports" {...navLink('/student/reports', 'Reports')}>Reports</Link>
             <Link to="/student/profile" {...navLink('/student/profile', 'Profile')}>Profile</Link>
+            <button onClick={() => setShowFeedback(true)} style={{ background: 'none', border: 'none', color: '#f36d44', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>Give Feedback</button>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-          <DarkModeToggle />
           {user && <NotificationBell userId={user.id} />}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div style={{ width: 30, height: 30, borderRadius: '50%', background: user?.avatar_color || '#f36d44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '0.75rem', color: 'white' }}>
@@ -199,7 +210,29 @@ const StudentLayout = ({ children }) => {
           </button>
         </div>
       </nav>
-      <main style={{ flex: 1, background: '#f5f7fa' }}>
+      
+      {news && (
+        <div style={{ background: '#1e3a8a', color: 'white', padding: '0.4rem 0', fontSize: '0.85rem', fontWeight: 'bold', display: 'flex' }}>
+          <marquee scrollamount="6">{news}</marquee>
+        </div>
+      )}
+
+      {showFeedback && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <h3 style={{ margin: '0 0 1rem 0' }}>Submit Feedback</h3>
+            <form onSubmit={handleFeedbackSubmit}>
+              <textarea className="input-field" rows="4" placeholder="Type your feedback, suggestion, or issue here..." value={feedbackMsg} onChange={e => setFeedbackMsg(e.target.value)} required />
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Submit</button>
+                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setShowFeedback(false)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <main style={{ flex: 1, background: 'var(--bg-color)' }}>
         {children}
       </main>
       {user && <SimpleChatbot userId={user.id} />}

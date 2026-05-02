@@ -115,13 +115,13 @@ const StudentProfile = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
 
         {/* ── Edit Profile ── */}
-        <div style={{ background: 'white', borderRadius: '14px', padding: '1.5rem', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #e2e8f0' }}>
+        <div style={{ background: 'var(--surface-color)', borderRadius: '14px', padding: '1.5rem', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
             <div style={{ width: 34, height: 34, borderRadius: '8px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <User size={18} color="#3b82f6" />
             </div>
             <div>
-              <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#071125' }}>Edit Profile</div>
+              <div style={{ fontWeight: '900', fontSize: '0.95rem', color: 'var(--text-primary)' }}>Edit Profile</div>
               <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Update your contact details</div>
             </div>
           </div>
@@ -152,13 +152,13 @@ const StudentProfile = () => {
         </div>
 
         {/* ── Change Password ── */}
-        <div style={{ background: 'white', borderRadius: '14px', padding: '1.5rem', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #e2e8f0' }}>
+        <div style={{ background: 'var(--surface-color)', borderRadius: '14px', padding: '1.5rem', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
             <div style={{ width: 34, height: 34, borderRadius: '8px', background: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Lock size={18} color="#f36d44" />
             </div>
             <div>
-              <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#071125' }}>Change Password</div>
+              <div style={{ fontWeight: '900', fontSize: '0.95rem', color: 'var(--text-primary)' }}>Change Password</div>
               <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Keep your account secure</div>
             </div>
           </div>
@@ -186,12 +186,12 @@ const StudentProfile = () => {
         </div>
 
         {/* ── Account Info (read-only) ── */}
-        <div style={{ background: 'white', borderRadius: '14px', padding: '1.5rem', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #e2e8f0', gridColumn: '1 / -1' }}>
+        <div style={{ background: 'var(--surface-color)', borderRadius: '14px', padding: '1.5rem', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #e2e8f0', gridColumn: '1 / -1' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
             <div style={{ width: 34, height: 34, borderRadius: '8px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <BookOpen size={18} color="#16a34a" />
             </div>
-            <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#071125' }}>Account Information</div>
+            <div style={{ fontWeight: '900', fontSize: '0.95rem', color: 'var(--text-primary)' }}>Account Information</div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
             {[
@@ -204,7 +204,7 @@ const StudentProfile = () => {
             ].map(({ label, value }) => (
               <div key={label} style={{ background: '#f8fafc', borderRadius: '10px', padding: '0.85rem 1rem' }}>
                 <div style={{ fontSize: '0.68rem', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.3rem' }}>{label}</div>
-                <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.9rem' }}>{value}</div>
+                <div style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.9rem' }}>{value}</div>
               </div>
             ))}
           </div>

@@ -41,10 +41,19 @@ const SimpleChatbot = ({ userId }) => {
     const lowerInput = userText.toLowerCase();
     let botReply = '';
 
-    if (lowerInput.includes('mark') || lowerInput.includes('score') || lowerInput.includes('grade') || lowerInput.includes('result')) {
+    // FAQ Logic
+    if (lowerInput.includes('password') || lowerInput.includes('reset')) {
+      botReply = "You can reset your password from the 'Profile' section using the 'Change Password' option.";
+    } else if (lowerInput.includes('contact') || lowerInput.includes('support') || lowerInput.includes('help')) {
+      botReply = "For support, please reach out to your instructor or system administrator via email.";
+    } else if (lowerInput.includes('how to use') || lowerInput.includes('guide')) {
+      botReply = "Navigate to 'Assignments' to see your pending tasks. Once completed, you can view your scores in 'Reports'.";
+    } else if (lowerInput.includes('group') || lowerInput.includes('section')) {
+      botReply = "Your group and section are assigned by the Admin. You can view them in your Profile.";
+    } else if (lowerInput.includes('mark') || lowerInput.includes('score') || lowerInput.includes('grade') || lowerInput.includes('result')) {
       botReply = await fetchMarks();
     } else {
-      botReply = "I only know about your marks. Try asking 'What are my marks?'";
+      botReply = "I can answer general FAQs (like password resets, support, groups) or show your marks. Try asking 'How do I reset my password?' or 'What are my marks?'";
     }
 
     setMessages(prev => [...prev, { sender: 'bot', text: botReply }]);

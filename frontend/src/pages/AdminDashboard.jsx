@@ -5,7 +5,7 @@ import {
   Plus, Users, BookOpen, Clock, AlertTriangle, X, Trash2, Play, Square,
   AreaChart, Download, FileText, UserCheck, CheckCircle, RefreshCcw,
   Filter, Send, HelpCircle, Edit3, Upload, User, Layers, ChevronDown,
-  ChevronRight, Eye, Settings, LogOut, Search
+  ChevronRight, Eye, Settings, LogOut, Search, Megaphone, MessageSquare
 } from 'lucide-react';
 
 /* ─────────── Stat Card ─────────── */
@@ -92,6 +92,7 @@ const AdminDashboard = () => {
   const [tTestCases, setTTestCases] = useState([{ input: '', output: '' }]);
   const [tSampleIn, setTSampleIn] = useState('');
   const [tSampleOut, setTSampleOut] = useState('');
+  const [tNotes, setTNotes] = useState('');
 
   /* ─── Student / Profile states ─── */
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -124,6 +125,7 @@ const AdminDashboard = () => {
 
   /* ─── Reports ─── */
   const [reportFilter, setReportFilter] = useState('All');
+  const [reportViewMode, setReportViewMode] = useState('tasks'); // 'tasks' | 'students'
 
   /* ─── People / Results modal ─── */
   const [showPeopleModal, setShowPeopleModal] = useState(false);
@@ -137,6 +139,10 @@ const AdminDashboard = () => {
 
   /* ─── Create Admin Modal ─── */
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showNewsModal, setShowNewsModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [newsText, setNewsText] = useState('');
+  const [feedbacks, setFeedbacks] = useState([]);
   const [newAdminUser, setNewAdminUser] = useState('');
   const [newAdminPass, setNewAdminPass] = useState('');
 
@@ -191,8 +197,32 @@ const AdminDashboard = () => {
     } catch (err) { console.error(err); }
   };
 
+  const fetchNews = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/announcements`);
+      const data = await res.json();
+      setNewsText(data.message || '');
+    } catch(e) {}
+  };
+
+  const fetchFeedback = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/feedback`);
+      const data = await res.json();
+      setFeedbacks(Array.isArray(data) ? data : []);
+    } catch(e) {}
+  };
+
+  const handleOpenFeedback = async () => {
+    setShowFeedbackModal(true);
+    try {
+      await fetch(`${API_BASE_URL}/api/feedback/mark-read`, { method: 'PUT' });
+      setFeedbacks(prev => prev.map(f => ({ ...f, isRead: true })));
+    } catch(e) {}
+  };
+
   const handleGlobalRefresh = () => {
-    fetchStudents(); fetchDays(); fetchReports(); fetchGroups(); fetchAdmins();
+    fetchStudents(); fetchDays(); fetchReports(); fetchGroups(); fetchAdmins(); fetchNews(); fetchFeedback();
   };
 
   useEffect(() => { handleGlobalRefresh(); }, []);
@@ -259,7 +289,7 @@ const AdminDashboard = () => {
   /* ══════════ Task Handlers ══════════ */
   const handleOpenTaskForDay = (dayId) => {
     setEditingTask(null);
-    setTDayId(dayId); setTTitle(''); setTDesc(''); setTJson('');
+    setTDayId(dayId); setTTitle(''); setTDesc(''); setTJson(''); setTNotes('');
     setTTime(30); setTAttempts(1); setTAllowedUsers([]); setTAllowedGroups([]);
     setTAssignMode('all'); setTaskType('Quiz (Multiple Choice)');
     setTTestCases([{ input: '', output: '' }]); setTSampleIn(''); setTSampleOut('');
@@ -270,6 +300,7 @@ const AdminDashboard = () => {
     setEditingTask(task);
     setTDayId(task.dayId);
     setTTitle(task.title);
+    setTNotes(task.notes || '');
     setTTime(task.time_limit);
     setTAttempts(task.attempt_limit || 1);
     const au = task.allowedUsers || [];
@@ -343,7 +374,7 @@ const AdminDashboard = () => {
       const url = editingTask ? `${API_BASE_URL}/api/exams/${editingTask._id}` : `${API_BASE_URL}/api/exams`;
       const res = await fetch(url, {
         method, headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dayId: tDayId, title: tTitle, time_limit: tTime, attempt_limit: tAttempts, questions, allowedUsers, allowedGroups })
+        body: JSON.stringify({ dayId: tDayId, title: tTitle, notes: tNotes, time_limit: tTime, attempt_limit: tAttempts, questions, allowedUsers, allowedGroups })
       });
       if (res.ok) {
         fetchDays(); closeTaskModal();
@@ -377,7 +408,7 @@ const AdminDashboard = () => {
 
   const closeTaskModal = () => {
     setShowTaskModal(false); setEditingTask(null);
-    setTTitle(''); setTDesc(''); setTJson(''); setTTime(30); setTAttempts(1);
+    setTTitle(''); setTNotes(''); setTDesc(''); setTJson(''); setTTime(30); setTAttempts(1);
     setTAllowedUsers([]); setTAllowedGroups([]); setTAssignMode('all');
     setTTestCases([{ input: '', output: '' }]); setTSampleIn(''); setTSampleOut('');
   };
@@ -530,15 +561,48 @@ const AdminDashboard = () => {
   };
 
   const handleDownloadReport = () => {
-    const data = getFilteredReports();
-    if (data.length === 0) return showToast('No data to download', 'error');
-    const headers = ['Student Name', 'Roll No', 'Task Name', 'Score', 'Status', 'Date'];
-    const rows = data.map(r => [r.student?.name, r.student?.roll_no, r.exam?.title, r.score, 'Completed', new Date(r.createdAt).toLocaleDateString()]);
-    const csv = [headers, ...rows].map(e => e.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `report_${new Date().toLocaleDateString()}.csv`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    if (reportViewMode === 'tasks') {
+      const data = getFilteredReports();
+      if (data.length === 0) return showToast('No data to download', 'error');
+      const headers = ['Student Name', 'Roll No', 'Task Name', 'Score', 'Status', 'Date'];
+      const rows = data.map(r => [r.student?.name, r.student?.roll_no, r.exam?.title, r.score, 'Completed', new Date(r.createdAt).toLocaleDateString()]);
+      const csv = [headers, ...rows].map(e => e.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `report_tasks_${new Date().toLocaleDateString()}.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    } else {
+      const data = getStudentWiseReports();
+      if (data.length === 0) return showToast('No data to download', 'error');
+      const headers = ['Student Name', 'Roll No', 'Tasks Completed', 'Total Score'];
+      const rows = data.map(r => [r.student?.name, r.student?.roll_no, r.tasksCompleted, r.totalScore]);
+      const csv = [headers, ...rows].map(e => e.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `report_students_${new Date().toLocaleDateString()}.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+  };
+
+  const getStudentWiseReports = () => {
+    const bestMap = new Map();
+    reports.forEach(r => {
+      if (!r.student || !r.exam) return;
+      const key = `${r.student._id}_${r.exam._id}`;
+      const existing = bestMap.get(key);
+      if (!existing || r.score > existing.score) bestMap.set(key, r);
+    });
+    
+    const studentMap = new Map();
+    Array.from(bestMap.values()).forEach(r => {
+      const sId = r.student._id;
+      if (!studentMap.has(sId)) studentMap.set(sId, { student: r.student, tasksCompleted: 0, totalScore: 0 });
+      const s = studentMap.get(sId);
+      s.tasksCompleted++;
+      s.totalScore += r.score;
+    });
+    
+    return Array.from(studentMap.values()).sort((a,b) => b.totalScore - a.totalScore);
   };
 
   const handleUpdateSettings = async (e) => {
@@ -579,13 +643,13 @@ const AdminDashboard = () => {
   /* ─── Sample filler ─── */
   const handleFillSample = () => {
     if (taskType.includes('Mixed')) {
-      setTJson(JSON.stringify({ mcq: [{ q: 'Which keyword creates an object in Java?', options: ['class', 'new', 'this', 'super'], ans: 'new' }], jumble: [{ hint: 'Form a Java print statement:', keywords: ['"Hello"', 'println', 'System.out.', ';', '(', ')'], answer: ['System.out.', 'println', '(', '"Hello"', ')', ';'] }] }, null, 2));
+      setTJson(JSON.stringify({ mcq: [{ q: 'What is the output of the following Java code?\n\npublic class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello");\n  }\n}', options: ['Hello', 'Compilation Error', 'Runtime Error', 'None'], ans: 'Hello' }], jumble: [{ hint: 'Form a Java print statement:', keywords: ['"Hello"', 'println', 'System.out.', ';', '(', ')'], answer: ['System.out.', 'println', '(', '"Hello"', ')', ';'] }] }, null, 2));
       setTTitle('Java Mixed Challenge');
     } else if (taskType.includes('Jumble')) {
       setTJson(JSON.stringify([{ hint: 'Form a valid Java class declaration:', keywords: ['Main', 'class', '{', '}', 'public'], answer: ['public', 'class', 'Main', '{', '}'] }], null, 2));
       setTTitle('Java Syntax Keywords');
     } else {
-      setTJson(JSON.stringify([{ q: 'Which Java keyword is used to create an object?', options: ['class', 'new', 'this', 'super'], ans: 'new' }], null, 2));
+      setTJson(JSON.stringify([{ q: 'What is the output of the following Java code?\n\npublic class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello World");\n  }\n}', options: ['Hello World', 'Compilation Error', 'Runtime Error', 'None'], ans: 'Hello World' }], null, 2));
       setTTitle('Basic Java Fundamentals');
     }
     showToast('Sample data loaded!');
@@ -604,12 +668,21 @@ const AdminDashboard = () => {
       {/* ─── Header ─── */}
       <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '2.25rem', fontWeight: '900', letterSpacing: '-1.5px', color: '#071125', margin: 0 }}>
+          <h1 style={{ fontSize: '2.25rem', fontWeight: '900', letterSpacing: '-1.5px', color: 'var(--text-primary)', margin: 0 }}>
             SMART QUIZ <span style={{ color: '#f36d44' }}>PRO</span>
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>Enterprise Knowledge Assessment System</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="btn btn-outline" onClick={() => setShowNewsModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f59e0b', borderColor: '#f59e0b' }}>
+            <Megaphone size={16} /> Manage News
+          </button>
+          <button className="btn btn-outline" onClick={handleOpenFeedback} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#8b5cf6', borderColor: '#8b5cf6' }}>
+            <MessageSquare size={16} /> View Feedback
+            {feedbacks.filter(f => !f.isRead).length > 0 && (
+              <span style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#ef4444', color: 'white', fontSize: '0.65rem', fontWeight: 'bold', padding: '2px 6px', borderRadius: '10px' }}>{feedbacks.filter(f => !f.isRead).length}</span>
+            )}
+          </button>
           <button className="btn btn-outline" onClick={() => setShowSettingsModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <Settings size={16} /> Settings
           </button>
@@ -658,7 +731,7 @@ const AdminDashboard = () => {
           {days.map(day => {
             const isCollapsed = !expandedDays.has(day._id);
             return (
-              <div key={day._id} style={{ borderRadius: '12px', border: '1px solid #e2e8f0', borderLeft: '5px solid #071125', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', background: 'white' }}>
+              <div key={day._id} style={{ borderRadius: '12px', border: '1px solid #e2e8f0', borderLeft: '5px solid #071125', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', background: 'var(--surface-color)' }}>
                 {/* Module Header */}
                 <div onClick={() => toggleDayCollapse(day._id)}
                   style={{ padding: '0.85rem 1.25rem', background: isCollapsed ? '#f8fafc' : 'linear-gradient(135deg,#071125,#1e3a5f)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'background 0.25s' }}>
@@ -701,7 +774,7 @@ const AdminDashboard = () => {
                           const accessColor = hasGroupAccess ? '#7c3aed' : hasUserAccess ? '#f36d44' : '#16a34a';
                           return (
                             <tr key={t._id} style={{ borderTop: '1px solid #f8fafc' }}>
-                              <td style={{ paddingLeft: '1.5rem', paddingTop: '0.75rem', paddingBottom: '0.75rem', fontWeight: '700', color: '#1e293b' }}>{t.title}</td>
+                              <td style={{ paddingLeft: '1.5rem', paddingTop: '0.75rem', paddingBottom: '0.75rem', fontWeight: '700', color: 'var(--text-primary)' }}>{t.title}</td>
                               <td><span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#5b21b6', background: '#f5f3ff', padding: '0.2rem 0.5rem', borderRadius: '5px' }}>{typeLabel}</span></td>
                               <td><span style={{ fontSize: '0.68rem', fontWeight: '900', color: t.status === 'running' ? '#16a34a' : '#ef4444', background: t.status === 'running' ? '#f0fdf4' : '#fff1f2', padding: '0.2rem 0.6rem', borderRadius: '5px', textTransform: 'uppercase' }}>{t.status}</span></td>
                               <td><span style={{ fontSize: '0.65rem', fontWeight: '800', color: accessColor, background: accessColor + '15', padding: '0.2rem 0.5rem', borderRadius: '5px' }}>👥 {accessLabel}</span></td>
@@ -768,7 +841,7 @@ const AdminDashboard = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                           <Avatar name={s.name} color={s.avatar_color || '#3b82f6'} size={36} />
                           <div>
-                            <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.9rem' }}>{s.name}</div>
+                            <div style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.9rem' }}>{s.name}</div>
                             <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{s.email || '-'}</div>
                           </div>
                         </div>
@@ -822,7 +895,7 @@ const AdminDashboard = () => {
               <div key={g._id} className="card" style={{ borderTop: `4px solid ${g.color || '#3b82f6'}`, padding: '1.25rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                   <div>
-                    <div style={{ fontWeight: '900', fontSize: '1rem', color: '#071125' }}>{g.name}</div>
+                    <div style={{ fontWeight: '900', fontSize: '1rem', color: 'var(--text-primary)' }}>{g.name}</div>
                     <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>{g.description || 'No description'}</div>
                   </div>
                   <div style={{ display: 'flex', gap: '0.4rem' }}>
@@ -854,47 +927,64 @@ const AdminDashboard = () => {
       {/* ══════════ REPORTS TAB ══════════ */}
       {adminTab === 'Reports' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
-            {getTaskStats().map((s, i) => (
-              <div key={i} className="card" style={{ borderLeft: 'none' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>{s.name}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: '900', color: '#071125' }}>{s.count} Attempts</div>
-                  <div style={{ padding: '0.3rem 0.6rem', background: '#f36d44', color: 'white', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>AVG {s.avg}</div>
-                </div>
-              </div>
-            ))}
+          
+          <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
+             <button onClick={() => setReportViewMode('tasks')} style={{ background: 'none', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', color: reportViewMode === 'tasks' ? '#f36d44' : '#64748b', borderBottom: reportViewMode === 'tasks' ? '2px solid #f36d44' : 'none', paddingBottom: '0.3rem', textTransform: 'uppercase' }}>Task Wise Report</button>
+             <button onClick={() => setReportViewMode('students')} style={{ background: 'none', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', color: reportViewMode === 'students' ? '#f36d44' : '#64748b', borderBottom: reportViewMode === 'students' ? '2px solid #f36d44' : 'none', paddingBottom: '0.3rem', textTransform: 'uppercase' }}>Student Wise Report</button>
           </div>
+
+
 
           <div className="card" style={{ padding: 0 }}>
             <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontWeight: '900', color: '#071125', margin: 0 }}>Attempt History</h3>
+              <h3 style={{ fontWeight: '900', color: 'var(--text-primary)', margin: 0 }}>{reportViewMode === 'tasks' ? 'Attempt History' : 'Student Performance'}</h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <button onClick={handleDownloadReport} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderColor: '#16a34a', color: '#16a34a' }}>
                   <Download size={16} /> CSV
                 </button>
-                <select value={reportFilter} onChange={e => setReportFilter(e.target.value)} style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.85rem' }}>
-                  <option value="All">All Tasks</option>
-                  {getTaskStats().map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-                </select>
+                {reportViewMode === 'tasks' && (
+                  <select value={reportFilter} onChange={e => setReportFilter(e.target.value)} style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.85rem' }}>
+                    <option value="All">All Tasks</option>
+                    {getTaskStats().map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                  </select>
+                )}
               </div>
             </div>
-            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-              <thead><tr style={{ background: '#f8fafc' }}><th style={{ padding: '1rem' }}>Student</th><th>Task</th><th>Score</th><th>Date</th></tr></thead>
-              <tbody>
-                {getFilteredReports().map((r, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ fontWeight: '700' }}>{r.student?.name}</div>
-                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{r.student?.roll_no}</div>
-                    </td>
-                    <td style={{ fontWeight: 'bold' }}>{r.exam?.title}</td>
-                    <td style={{ fontWeight: '900', color: '#f36d44' }}>{r.score} pts</td>
-                    <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(r.createdAt).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            
+            {reportViewMode === 'tasks' ? (
+              <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                <thead><tr style={{ background: '#f8fafc' }}><th style={{ padding: '1rem' }}>Student</th><th>Task</th><th>Score</th><th>Date</th></tr></thead>
+                <tbody>
+                  {getFilteredReports().map((r, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ fontWeight: '700' }}>{r.student?.name}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{r.student?.roll_no}</div>
+                      </td>
+                      <td style={{ fontWeight: 'bold' }}>{r.exam?.title}</td>
+                      <td style={{ fontWeight: '900', color: '#f36d44' }}>{r.score} pts</td>
+                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(r.createdAt).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  {getFilteredReports().length === 0 && <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>No attempt records found.</td></tr>}
+                </tbody>
+              </table>
+            ) : (
+              <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                <thead><tr style={{ background: '#f8fafc' }}><th style={{ padding: '1rem' }}>Student Name</th><th>Roll No</th><th style={{ textAlign: 'center' }}>Tasks Completed</th><th style={{ textAlign: 'center' }}>Total Score</th></tr></thead>
+                <tbody>
+                  {getStudentWiseReports().map((r, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '1rem', fontWeight: '700' }}>{r.student?.name}</td>
+                      <td style={{ color: '#64748b' }}>{r.student?.roll_no}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{r.tasksCompleted}</td>
+                      <td style={{ textAlign: 'center', fontWeight: '900', color: '#f36d44', fontSize: '1.1rem' }}>{r.totalScore}</td>
+                    </tr>
+                  ))}
+                  {getStudentWiseReports().length === 0 && <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>No student records found.</td></tr>}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
@@ -903,7 +993,7 @@ const AdminDashboard = () => {
       {adminTab === 'Admins' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, color: '#071125', fontWeight: '900' }}>Platform Administrators</h3>
+            <h3 style={{ margin: 0, color: 'var(--text-primary)', fontWeight: '900' }}>Platform Administrators</h3>
             <button onClick={() => setShowAdminModal(true)} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Plus size={16}/> Add Admin</button>
           </div>
           <div className="card" style={{ padding: 0 }}>
@@ -936,7 +1026,7 @@ const AdminDashboard = () => {
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center', border: '2px solid #ef4444' }}>
             <AlertTriangle size={56} color="#ef4444" style={{ marginBottom: '1rem' }} />
-            <h2 style={{ fontWeight: '900', color: '#071125', marginBottom: '0.5rem' }}>Confirm Action</h2>
+            <h2 style={{ fontWeight: '900', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Confirm Action</h2>
             <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>{showConfirmModal.title}</p>
             <div style={{ display: 'flex', gap: '1rem' }}>
               <button onClick={showConfirmModal.onConfirm} className="btn btn-primary" style={{ flex: 1, background: '#ef4444' }}>Confirm</button>
@@ -950,7 +1040,7 @@ const AdminDashboard = () => {
       {showDayModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2 style={{ marginBottom: '1.5rem', fontWeight: '900', color: '#071125' }}>Create New Module</h2>
+            <h2 style={{ marginBottom: '1.5rem', fontWeight: '900', color: 'var(--text-primary)' }}>Create New Module</h2>
             <form onSubmit={handeDayCreate} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <input placeholder="Module ID (e.g. 1, 2A, Day 5)" value={dNum} onChange={e => setDNum(e.target.value)} className="input-field" required />
               <input placeholder="Module Title" value={dTitle} onChange={e => setDTitle(e.target.value)} className="input-field" required />
@@ -967,7 +1057,7 @@ const AdminDashboard = () => {
       {showEditDayModal && editingDay && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '440px' }}>
-            <h2 style={{ marginBottom: '1.5rem', fontWeight: '900', color: '#071125' }}>Edit Module</h2>
+            <h2 style={{ marginBottom: '1.5rem', fontWeight: '900', color: 'var(--text-primary)' }}>Edit Module</h2>
             <form onSubmit={handleUpdateDay} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.4rem' }}>MODULE ID</label>
@@ -990,7 +1080,7 @@ const AdminDashboard = () => {
       {showStudentModal && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '560px' }}>
-            <h2 style={{ marginBottom: '1.5rem', fontWeight: '900', color: '#071125' }}>
+            <h2 style={{ marginBottom: '1.5rem', fontWeight: '900', color: 'var(--text-primary)' }}>
               {editingStudent ? 'Edit Student Profile' : 'Register New Student'}
             </h2>
             <form onSubmit={handleStudentSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -1062,7 +1152,7 @@ const AdminDashboard = () => {
               ].map(({ label, value }) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
                   <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase' }}>{label}</span>
-                  <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#1e293b' }}>{value}</span>
+                  <span style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-primary)' }}>{value}</span>
                 </div>
               ))}
 
@@ -1097,7 +1187,7 @@ const AdminDashboard = () => {
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '560px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ fontWeight: '900', color: '#071125', margin: 0 }}>Import Students via Excel</h2>
+              <h2 style={{ fontWeight: '900', color: 'var(--text-primary)', margin: 0 }}>Import Students via Excel</h2>
               <button onClick={() => { setShowUploadModal(false); setUploadResult(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
             </div>
 
@@ -1152,7 +1242,7 @@ const AdminDashboard = () => {
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '580px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <h2 style={{ fontWeight: '900', color: '#071125', margin: 0 }}>{editingGroup ? 'Edit Group' : 'Create Group'}</h2>
+              <h2 style={{ fontWeight: '900', color: 'var(--text-primary)', margin: 0 }}>{editingGroup ? 'Edit Group' : 'Create Group'}</h2>
               <button onClick={() => setShowGroupModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
             </div>
 
@@ -1234,7 +1324,7 @@ const AdminDashboard = () => {
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '870px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
-              <h2 style={{ fontWeight: '900', color: '#071125', margin: 0 }}>{editingTask ? 'Edit Task' : 'Create Task'}</h2>
+              <h2 style={{ fontWeight: '900', color: 'var(--text-primary)', margin: 0 }}>{editingTask ? 'Edit Task' : 'Create Task'}</h2>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button onClick={handleFillSample} className="btn btn-outline" style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><HelpCircle size={14} /> Sample</button>
                 <button onClick={closeTaskModal} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
@@ -1264,6 +1354,7 @@ const AdminDashboard = () => {
                 </div>
 
                 <input value={tTitle} onChange={e => setTTitle(e.target.value)} placeholder="Task Title" className="input-field" required />
+                <textarea value={tNotes} onChange={e => setTNotes(e.target.value)} placeholder="Study Notes (optional) - visible to students before starting" className="input-field" style={{ minHeight: '60px' }} />
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div>
@@ -1291,7 +1382,7 @@ const AdminDashboard = () => {
                   </div>
 
                   {tAssignMode === 'groups' && (
-                    <div style={{ padding: '0.75rem 1rem', maxHeight: '160px', overflowY: 'auto' }}>
+                    <div style={{ padding: '0.75rem 1rem', maxHeight: '240px', overflowY: 'auto' }}>
                       {groups.length === 0 ? (
                         <div style={{ color: '#94a3b8', fontSize: '0.82rem', padding: '1rem', textAlign: 'center' }}>No groups created yet. Go to the Groups tab to create one.</div>
                       ) : (
@@ -1314,13 +1405,13 @@ const AdminDashboard = () => {
                   )}
 
                   {tAssignMode === 'students' && (
-                    <div style={{ padding: '0.75rem 1rem', maxHeight: '160px', overflowY: 'auto' }}>
+                    <div style={{ padding: '0.75rem 1rem', maxHeight: '240px', overflowY: 'auto' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem', cursor: 'pointer' }}>
                         <input type="checkbox" checked={tAllowedUsers.length === 0} onChange={() => setTAllowedUsers([])} />
                         <span style={{ fontWeight: 'bold' }}>All Students</span>
                       </label>
                       {students.map(s => (
-                        <label key={s._id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.2rem 0', cursor: 'pointer' }}>
+                        <label key={s._id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0', cursor: 'pointer', borderBottom: '1px solid #fafafa' }}>
                           <input type="checkbox"
                             checked={tAllowedUsers.includes(s._id)}
                             onChange={e => {
@@ -1328,7 +1419,7 @@ const AdminDashboard = () => {
                               else setTAllowedUsers(tAllowedUsers.filter(id => id !== s._id));
                             }}
                           />
-                          <span style={{ fontSize: '0.85rem' }}>{s.roll_no} — {s.name}</span>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>{s.roll_no} — <span style={{ fontWeight: 'bold' }}>{s.name}</span></span>
                         </label>
                       ))}
                     </div>
@@ -1368,7 +1459,7 @@ const AdminDashboard = () => {
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem', padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', background: '#fff', flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: '1rem', padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', background: 'var(--surface-color)', flexShrink: 0 }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>{editingTask ? 'Update Task' : 'Create Task'}</button>
                 <button type="button" onClick={closeTaskModal} className="btn" style={{ flex: 1 }}>Cancel</button>
               </div>
@@ -1427,7 +1518,7 @@ const AdminDashboard = () => {
       {showSettingsModal && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <h2 style={{ marginBottom: '1.5rem', fontWeight: '900', color: '#071125' }}>Account Settings</h2>
+            <h2 style={{ marginBottom: '1.5rem', fontWeight: '900', color: 'var(--text-primary)' }}>Account Settings</h2>
             <form onSubmit={handleUpdateSettings}>
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.5rem' }}>NEW ADMIN PASSWORD</label>
@@ -1459,6 +1550,49 @@ const AdminDashboard = () => {
                </div>
                <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>Create Admin User</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── News Modal ─── */}
+      {showNewsModal && (
+        <div className="modal-overlay" style={{ zIndex: 10000 }}>
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <h3 style={{ margin: '0 0 1rem 0' }}>Manage Announcement</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>This will be displayed as a scrolling marquee on the Student Dashboard. You can edit or delete the current news below.</p>
+            <textarea className="input-field" rows="3" value={newsText} onChange={e => setNewsText(e.target.value)} placeholder="Type news here..." />
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={async () => {
+                if(!newsText.trim()) return showToast('News cannot be empty. Use Delete to remove it.', 'error');
+                await fetch(`${API_BASE_URL}/api/announcements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: newsText }) });
+                showToast('News Published/Updated!'); setShowNewsModal(false); fetchNews();
+              }}>Publish / Update</button>
+              <button className="btn" style={{ flex: 1, background: '#ef4444', color: 'white' }} onClick={async () => {
+                await fetch(`${API_BASE_URL}/api/announcements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: '' }) });
+                showToast('News Removed!'); setNewsText(''); setShowNewsModal(false); fetchNews();
+              }}>Delete News</button>
+              <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setShowNewsModal(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Feedback Modal ─── */}
+      {showFeedbackModal && (
+        <div className="modal-overlay" style={{ zIndex: 10000 }}>
+          <div className="modal-content" style={{ maxWidth: '600px', padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '1rem 1.5rem', background: '#071125', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Student Feedback</h3>
+              <X onClick={() => setShowFeedbackModal(false)} style={{ cursor: 'pointer' }} size={24} />
+            </div>
+            <div style={{ padding: '1.5rem', maxHeight: '60vh', overflowY: 'auto' }}>
+              {feedbacks.length === 0 ? <p style={{ textAlign: 'center', color: '#64748b' }}>No feedback submitted yet.</p> : feedbacks.map((f, i) => (
+                <div key={i} style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{f.student?.name || 'Unknown'} ({f.student?.roll_no || 'N/A'}) <span style={{ fontWeight: 'normal', fontSize: '0.75rem', color: '#64748b', marginLeft: '1rem' }}>{new Date(f.createdAt).toLocaleString()}</span></div>
+                  <div style={{ marginTop: '0.5rem', color: 'var(--text-primary)', fontSize: '0.95rem', whiteSpace: 'pre-wrap' }}>{f.message}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

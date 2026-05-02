@@ -11,6 +11,14 @@ const StudentDashboard = ({ tab }) => {
   const [loading, setLoading] = useState(true);
   const [myGroupIds, setMyGroupIds] = useState([]);
   const [expandedDays, setExpandedDays] = useState({});
+  const [attemptTask, setAttemptTask] = useState(null);
+  const [attemptPath, setAttemptPath] = useState('');
+  
+  // Leaderboard States
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [selectedLeaderboardTaskName, setSelectedLeaderboardTaskName] = useState('');
+  const [fetchingLeaderboard, setFetchingLeaderboard] = useState(false);
 
 
   const fetchData = async () => {
@@ -50,17 +58,37 @@ const StudentDashboard = ({ tab }) => {
   };
 
   const handleShowPeople = async (taskId, taskTitle) => {
-    setSelectedTaskName(taskTitle);
-    setShowPeopleModal(true);
-    setFetchingPeople(true);
+    setSelectedLeaderboardTaskName(taskTitle);
+    setShowLeaderboardModal(true);
+    setFetchingLeaderboard(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/attempts/task/${taskId}`);
       const data = await res.json();
-      setPeopleResults(data.filter(a => a.status === 'completed'));
+      
+      const bestMap = new Map();
+      data.filter(a => a.status === 'completed').forEach(a => {
+        const sId = a.student?._id || a.student;
+        const dur = new Date(a.updatedAt) - new Date(a.start_time || a.createdAt);
+        const existing = bestMap.get(sId);
+        if (!existing) {
+           bestMap.set(sId, { ...a, duration: dur });
+        } else {
+           if (a.score > existing.score || (a.score === existing.score && dur < existing.duration)) {
+             bestMap.set(sId, { ...a, duration: dur });
+           }
+        }
+      });
+      
+      const sorted = Array.from(bestMap.values()).sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.duration - b.duration;
+      });
+      
+      setLeaderboardData(sorted);
     } catch (err) {
       console.error(err);
     } finally {
-      setFetchingPeople(false);
+      setFetchingLeaderboard(false);
     }
   };
 
@@ -121,7 +149,7 @@ const StudentDashboard = ({ tab }) => {
                 const isCompleted = att?.status === 'completed';
 
                 return (
-                  <div key={task._id} style={{ background: 'white', border: '1px solid #ddd', borderRadius: '4px', padding: '1.25rem', display: 'flex', gap: '1.5rem', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
+                  <div key={task._id} style={{ background: 'var(--surface-color)', border: '1px solid #ddd', borderRadius: '4px', padding: '1.25rem', display: 'flex', gap: '1.5rem', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
                     {/* Left Frame Box */}
                     <div style={{ width: '200px', flexShrink: 0, padding: '4px', background: '#ddd', borderRadius: '4px' }}>
                        <div style={{ background: '#1a1a1a', height: '120px', borderRadius: '2px', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', border: '1px solid #000' }}>
@@ -136,7 +164,7 @@ const StudentDashboard = ({ tab }) => {
                     {/* Right Content */}
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                        <div>
-                         <h2 style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#333', marginBottom: '0.5rem' }}>{task.title}</h2>
+                         <h2 style={{ fontSize: '1.75rem', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>{task.title}</h2>
                          <div style={{ borderBottom: '1px solid #eee', marginBottom: '1rem' }}></div>
                        </div>
                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -157,16 +185,19 @@ const StudentDashboard = ({ tab }) => {
                             <span style={{ color: '#999', fontSize: '0.8rem' }}>on {new Date(task.createdAt).toLocaleDateString()}</span>
                          </div>
                          <div style={{ display: 'flex', gap: '0.75rem' }}>
-                           {task.questions && task.questions[0]?.type === 'SQL' ? (
-                               <button style={{ background: '#0e7490', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => navigate(`/student/sql/${task._id}`)}>OPEN EDITOR</button>
+                            <button style={{ background: 'transparent', color: '#64748b', border: '1px solid #cbd5e1', padding: '0.6rem 1.25rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }} onClick={() => handleShowPeople(task._id, task.title)}>
+                              🏆 LEADERBOARD
+                            </button>
+                            {task.questions && task.questions[0]?.type === 'SQL' ? (
+                               <button style={{ background: '#0e7490', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => { setAttemptTask(task); setAttemptPath(`/student/sql/${task._id}`); }}>OPEN EDITOR</button>
                             ) : (task.questions && (task.questions[0]?.type === 'Jumble' || (task.questions.some(q => q.type === 'Jumble') && task.questions.some(q => q.type === 'MCQ')))) ? (
-                                <button style={{ background: '#7c3aed', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => navigate(`/student/jumble/${task._id}`)}>
+                                <button style={{ background: '#7c3aed', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => { if (isCompleted) { navigate(`/student/jumble/${task._id}`); } else { setAttemptTask(task); setAttemptPath(`/student/jumble/${task._id}`); } }}>
                                   {isCompleted ? 'VIEW RESULT' : task.questions.some(q => q.type === 'MCQ') ? 'START MIXED ▶' : 'ARRANGE ↕'}
                                 </button>
                            ) : isCompleted ? (
                               <button style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => navigate(`/student/summary/${task._id}`)}>VIEW RESULT</button>
                             ) : (
-                               <button style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => navigate(`/student/quiz/${task._id}`)}>ATTEMPT</button>
+                               <button style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => { setAttemptTask(task); setAttemptPath(`/student/quiz/${task._id}`); }}>ATTEMPT</button>
                             )}
                           </div>
                         </div>
@@ -174,7 +205,7 @@ const StudentDashboard = ({ tab }) => {
                     </div>
                   );
                 }) : (
-                <div style={{ padding: '6rem', textAlign: 'center', background: 'white', borderRadius: '4px', color: '#bbb', border: '1px dashed #ddd' }}>No active for now</div>
+                <div style={{ padding: '6rem', textAlign: 'center', background: 'var(--surface-color)', borderRadius: '4px', color: '#bbb', border: '1px dashed #ddd' }}>No active for now</div>
               )}
             </>
           )}
@@ -186,14 +217,14 @@ const StudentDashboard = ({ tab }) => {
                    if (visibleTasks.length === 0) return null;
                    const isOpen = !!expandedDays[day._id];
                    return (
-                   <div key={day._id} style={{ background: 'white', border: '1px solid #ddd', borderRadius: '6px', overflow: 'hidden' }}>
+                   <div key={day._id} style={{ background: 'var(--surface-color)', border: '1px solid #ddd', borderRadius: '6px', overflow: 'hidden' }}>
                       {/* Day Header — click to toggle */}
                       <div
                         onClick={() => setExpandedDays(prev => ({ ...prev, [day._id]: !prev[day._id] }))}
                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.9rem 1.25rem', cursor: 'pointer', background: isOpen ? '#f8fafc' : 'white', borderBottom: isOpen ? '1px solid #eee' : 'none', userSelect: 'none' }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          <span style={{ fontWeight: '700', color: '#1a365d', fontSize: '0.95rem' }}>Day {day.dayNumber}: {day.title}</span>
+                          <span style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.95rem' }}>Day {day.dayNumber}: {day.title}</span>
                           <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#64748b', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: '700' }}>{visibleTasks.length} task{visibleTasks.length !== 1 ? 's' : ''}</span>
                         </div>
                         <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
@@ -205,9 +236,14 @@ const StudentDashboard = ({ tab }) => {
                             <div key={task._id} style={{ padding: '0.85rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx < visibleTasks.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                  <BookOpen size={16} color="#94a3b8" />
-                                 <div style={{ fontWeight: '600', color: '#333', fontSize: '0.9rem' }}>{task.title}</div>
+                                 <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9rem' }}>{task.title}</div>
                                </div>
-                               <span style={{ fontSize: '0.68rem', color: task.status === 'running' ? '#16a34a' : '#94a3b8', fontWeight: '800', textTransform: 'uppercase', border: `1px solid ${task.status === 'running' ? '#bbf7d0' : '#e2e8f0'}`, padding: '0.2rem 0.5rem', borderRadius: '4px', background: task.status === 'running' ? '#f0fdf4' : '#f8fafc' }}>{task.status}</span>
+                               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                 <button style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }} onClick={(e) => { e.stopPropagation(); handleShowPeople(task._id, task.title); }}>
+                                    🏆 RANK
+                                 </button>
+                                 <span style={{ fontSize: '0.68rem', color: task.status === 'running' ? '#16a34a' : '#94a3b8', fontWeight: '800', textTransform: 'uppercase', border: `1px solid ${task.status === 'running' ? '#bbf7d0' : '#e2e8f0'}`, padding: '0.2rem 0.5rem', borderRadius: '4px', background: task.status === 'running' ? '#f0fdf4' : '#f8fafc' }}>{task.status}</span>
+                               </div>
                             </div>
                           ))}
                         </div>
@@ -219,7 +255,7 @@ const StudentDashboard = ({ tab }) => {
           )}
 
           {tab === 'Reports' && (
-            <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--surface-color)', border: '1px solid #ddd', borderRadius: '4px', overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ background: '#f36d44', color: 'white' }}>
                   <tr>
@@ -234,12 +270,18 @@ const StudentDashboard = ({ tab }) => {
                   {getCompletedTasks().map((att, idx) => (
                     <tr key={att._id} style={{ borderBottom: '1px solid #eee' }}>
                       <td style={{ textAlign: 'center', padding: '1rem' }}>{idx + 1}</td>
-                      <td style={{ fontWeight: 'bold', color: '#333' }}>{att.exam?.title}</td>
+                      <td style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{att.exam?.title}</td>
                       <td style={{ textAlign: 'center', color: '#f36d44', fontWeight: 'bold' }}>
                           {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `${att.score} / 100` : `${att.score} / ${att.exam?.questions?.length || 1}`}
                       </td>
                       <td style={{ textAlign: 'center', color: '#777' }}>{new Date(att.updatedAt).toLocaleDateString()}</td>
-                      <td style={{ textAlign: 'right', paddingRight: '2rem' }}>
+                      <td style={{ textAlign: 'right', paddingRight: '2rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                          <button 
+                              onClick={() => handleShowPeople(att.exam?._id || att.exam, att.exam?.title)} 
+                              style={{ background: 'transparent', border: 'none', color: '#f59e0b', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}
+                          >
+                              🏆 Rank
+                          </button>
                           <button 
                               onClick={() => navigate(
                                 att.exam?.questions?.[0]?.type === 'SQL' ? `/student/sql/${att.exam?._id}` :
@@ -261,10 +303,10 @@ const StudentDashboard = ({ tab }) => {
           {tab === 'Completed Tasks' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                {getCompletedTasks().map(att => (
-                 <div key={att._id} style={{ background: 'white', padding: '1rem 1.5rem', borderRadius: '4px', border: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                 <div key={att._id} style={{ background: 'var(--surface-color)', padding: '1rem 1.5rem', borderRadius: '4px', border: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                        <div style={{ color: '#16a34a' }}><CheckCircle size={20} /></div>
-                       <div style={{ fontWeight: 'bold', color: '#333' }}>{att.exam?.title} (Completed)</div>
+                       <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{att.exam?.title} (Completed)</div>
                     </div>
                     <button 
                         style={{ background: '#f1f5f9', border: '1px solid #ddd', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', color: att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? '#0e7490' : '#333' }} 
@@ -279,6 +321,86 @@ const StudentDashboard = ({ tab }) => {
 
         </div>
       </div>
+      
+      {attemptTask && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '8px', maxWidth: '600px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', color: 'var(--text-primary)' }}>{attemptTask.notes ? 'Study Material' : 'Ready to begin?'}</h2>
+            {attemptTask.notes ? (
+              <div style={{ marginBottom: '2rem', maxHeight: '300px', overflowY: 'auto', background: '#f8fafc', padding: '1rem', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'pre-wrap' }}>
+                 {attemptTask.notes}
+              </div>
+            ) : (
+              <div style={{ marginBottom: '2rem', color: '#64748b' }}>
+                No study notes available for this exam. You can proceed to attempt it directly.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+               <button onClick={() => setAttemptTask(null)} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: 'var(--surface-color)', color: '#475569', fontWeight: 'bold', cursor: 'pointer' }}>CANCEL</button>
+               {attemptTask.notes && <button onClick={() => {}} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>STUDY</button>}
+               <button onClick={() => { navigate(attemptPath); setAttemptTask(null); }} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>ATTEMPT</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leaderboard Modal */}
+      {showLeaderboardModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--surface-color)', borderRadius: '8px', maxWidth: '700px', width: '100%', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+            <div style={{ background: 'linear-gradient(135deg, #1e293b, #0f172a)', padding: '1.5rem', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900', color: '#fbbf24' }}>🏆 Leaderboard</h2>
+                <div style={{ fontSize: '0.9rem', color: '#cbd5e1', marginTop: '0.2rem' }}>{selectedLeaderboardTaskName}</div>
+              </div>
+              <button onClick={() => setShowLeaderboardModal(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', cursor: 'pointer', padding: '0.5rem', borderRadius: '50%' }}><X size={20} /></button>
+            </div>
+            
+            <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              {fetchingLeaderboard ? (
+                <div style={{ textAlign: 'center', padding: '4rem', color: '#64748b' }}>Loading ranks...</div>
+              ) : leaderboardData.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '4rem', color: '#64748b' }}>No completed attempts for this task yet. Be the first!</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ background: '#f8fafc', position: 'sticky', top: 0, zIndex: 10 }}>
+                    <tr>
+                      <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', fontWeight: '900' }}>RANK</th>
+                      <th style={{ padding: '1rem', textAlign: 'left', color: '#64748b', fontSize: '0.8rem', fontWeight: '900' }}>STUDENT</th>
+                      <th style={{ padding: '1rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem', fontWeight: '900' }}>SCORE</th>
+                      <th style={{ padding: '1rem', textAlign: 'right', color: '#64748b', fontSize: '0.8rem', fontWeight: '900' }}>TIME TAKEN</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaderboardData.map((lb, idx) => {
+                      const durMins = Math.floor(lb.duration / 60000);
+                      const durSecs = Math.floor((lb.duration % 60000) / 1000);
+                      let rankBadge = <span style={{ fontWeight: 'bold', color: '#64748b' }}>#{idx + 1}</span>;
+                      if (idx === 0) rankBadge = <span style={{ fontSize: '1.5rem' }}>🥇</span>;
+                      if (idx === 1) rankBadge = <span style={{ fontSize: '1.5rem' }}>🥈</span>;
+                      if (idx === 2) rankBadge = <span style={{ fontSize: '1.5rem' }}>🥉</span>;
+                      
+                      const isMe = lb.student?._id === user?.id;
+
+                      return (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', background: isMe ? '#f0fdf4' : 'transparent' }}>
+                          <td style={{ padding: '1rem', textAlign: 'center' }}>{rankBadge}</td>
+                          <td style={{ padding: '1rem' }}>
+                            <div style={{ fontWeight: 'bold', color: isMe ? '#16a34a' : '#1e293b' }}>{lb.student?.name || 'Unknown'} {isMe && '(You)'}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{lb.student?.roll_no || 'N/A'}</div>
+                          </td>
+                          <td style={{ padding: '1rem', textAlign: 'center', fontWeight: '900', color: '#f36d44', fontSize: '1.1rem' }}>{lb.score}</td>
+                          <td style={{ padding: '1rem', textAlign: 'right', color: '#64748b', fontSize: '0.9rem' }}>{durMins}m {durSecs}s</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

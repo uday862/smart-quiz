@@ -10,6 +10,9 @@ const StudentAttemptSummary = () => {
   const [attempts, setAttempts] = useState([]);
   const [exam, setExam] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  const [attemptTask, setAttemptTask] = useState(null);
+  const [attemptPath, setAttemptPath] = useState('');
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
@@ -50,14 +53,14 @@ const StudentAttemptSummary = () => {
   return (
     <div className="moodle-container" style={{ padding: '2rem' }}>
       <div style={{ marginBottom: '2rem' }}>
-        <h1 className="page-title" style={{ marginBottom: '0.5rem', fontWeight: '900', color: '#071125' }}>{exam.title}</h1>
+        <h1 className="page-title" style={{ marginBottom: '0.5rem', fontWeight: '900', color: 'var(--text-primary)' }}>{exam.title}</h1>
         <div style={{ color: '#64748b', fontSize: '0.875rem' }}>
            <Link to="/student" style={{ color: '#f36d44', textDecoration: 'none', fontWeight: 'bold' }}>Dashboard</Link> / <span>Final Assessment Summary</span>
         </div>
       </div>
 
-      <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '2rem', marginBottom: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: '900', marginBottom: '2rem', color: '#071125', textAlign: 'center' }}>Official Attempt Records</h2>
+      <div style={{ background: 'var(--surface-color)', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '2rem', marginBottom: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: '900', marginBottom: '2rem', color: 'var(--text-primary)', textAlign: 'center' }}>Official Attempt Records</h2>
         
         <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginBottom: '3rem' }}>
            <div style={{ textAlign: 'center', padding: '1.5rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', minWidth: '240px' }}>
@@ -84,7 +87,7 @@ const StudentAttemptSummary = () => {
                 <tr key={attempt._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                   <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '1.25rem' }}>{idx + 1}</td>
                   <td>
-                    <div style={{ fontWeight: '900', color: '#071125' }}>Finished</div>
+                    <div style={{ fontWeight: '900', color: 'var(--text-primary)' }}>Finished</div>
                     <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{new Date(attempt.updatedAt).toLocaleDateString()} at {new Date(attempt.updatedAt).toLocaleTimeString()}</div>
                   </td>
                   <td style={{ textAlign: 'center', fontWeight: '900', color: '#f36d44', fontSize: '1.1rem' }}>{attempt.score}.00 / {max}.00</td>
@@ -106,7 +109,7 @@ const StudentAttemptSummary = () => {
               <button 
                 className="btn btn-primary" 
                 style={{ padding: '0.85rem 3rem', borderRadius: '6px', fontSize: '1.1rem', fontWeight: '900', background: '#071125' }} 
-                onClick={() => navigate(`/student/quiz/${exam._id}`)}
+                onClick={() => { setAttemptTask(exam); setAttemptPath(exam.questions?.[0]?.type === 'SQL' ? `/student/sql/${exam._id}` : (exam.questions?.some(q => q.type === 'Jumble')) ? `/student/jumble/${exam._id}` : `/student/quiz/${exam._id}`); }}
               >
                 RE-ATTEMPT MODULE
               </button>
@@ -117,6 +120,28 @@ const StudentAttemptSummary = () => {
       <div style={{ textAlign: 'center' }}>
          <button onClick={() => navigate('/student')} style={{ background: 'transparent', border: 'none', color: '#64748b', fontWeight: '900', cursor: 'pointer', fontSize: '0.9rem' }}>RETURN TO COMMAND CENTER</button>
       </div>
+
+      {attemptTask && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '8px', maxWidth: '600px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', color: 'var(--text-primary)' }}>{attemptTask.notes ? 'Study Material' : 'Ready to begin?'}</h2>
+            {attemptTask.notes ? (
+              <div style={{ marginBottom: '2rem', maxHeight: '300px', overflowY: 'auto', background: '#f8fafc', padding: '1rem', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'pre-wrap' }}>
+                 {attemptTask.notes}
+              </div>
+            ) : (
+              <div style={{ marginBottom: '2rem', color: '#64748b' }}>
+                No study notes available for this exam. You can proceed to attempt it directly.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+               <button onClick={() => setAttemptTask(null)} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: 'var(--surface-color)', color: '#475569', fontWeight: 'bold', cursor: 'pointer' }}>CANCEL</button>
+               {attemptTask.notes && <button onClick={() => {}} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>STUDY</button>}
+               <button onClick={() => { navigate(attemptPath); setAttemptTask(null); }} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>ATTEMPT</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

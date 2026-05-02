@@ -6,6 +6,7 @@ const examSchema = new mongoose.Schema({
     status: { type: String, enum: ['not_started', 'running', 'stopped'], default: 'not_started' },
     time_limit: { type: Number, required: true }, // in minutes
     attempt_limit: { type: Number, default: 1 },
+    notes: { type: String },
     questions: [{
         type: { type: String, enum: ['MCQ', 'Coding', 'Descriptive', 'SQL', 'Jumble'], required: true },
         words: [{ type: String }], // for Jumble: shuffled parts to arrange

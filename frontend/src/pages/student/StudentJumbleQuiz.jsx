@@ -48,10 +48,10 @@ const KeywordJumble = ({ question, qIndex, onAnswer, submitted }) => {
         <span style={{ background: '#7c3aed', color: 'white', fontWeight: '900', fontSize: '0.7rem', padding: '0.2rem 0.55rem', borderRadius: '6px', marginTop: '2px', flexShrink: 0 }}>
           🔤 Q{qIndex + 1}
         </span>
-        <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#f1f5f9', lineHeight: 1.5 }}>{question.text}</span>
+        <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#f1f5f9', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{question.text}</span>
       </div>
 
-      <div style={{ padding: '1.25rem', background: 'white' }}>
+      <div style={{ padding: '1.25rem', background: 'var(--surface-color)' }}>
         {/* Answer Slots */}
         <div style={{ marginBottom: '1rem' }}>
           <div style={{ fontSize: '0.65rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '0.6rem' }}>
@@ -141,10 +141,10 @@ const MCQQuestion = ({ question, qIndex, onAnswer, submitted }) => {
         <span style={{ background: '#f59e0b', color: '#1c1917', fontWeight: '900', fontSize: '0.7rem', padding: '0.2rem 0.55rem', borderRadius: '6px', marginTop: '2px', flexShrink: 0 }}>
           📝 Q{qIndex + 1}
         </span>
-        <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#f1f5f9', lineHeight: 1.5 }}>{question.text}</span>
+        <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#f1f5f9', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{question.text}</span>
       </div>
 
-      <div style={{ padding: '1.25rem', background: 'white', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <div style={{ padding: '1.25rem', background: 'var(--surface-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         {(question.options || []).map((opt, i) => {
           const isSelected = selected === opt;
           const isRight = submitted && opt === question.correct_answer;
@@ -163,7 +163,7 @@ const MCQQuestion = ({ question, qIndex, onAnswer, submitted }) => {
                 background: isRight ? '#dcfce7' : isWrong ? '#fee2e2' : isSelected ? '#fde68a' : '#f1f5f9',
                 color: isRight ? '#15803d' : isWrong ? '#b91c1c' : isSelected ? '#92400e' : '#64748b',
               }}>{letters[i]}</span>
-              <span style={{ fontWeight: isSelected || isRight ? '700' : '500', fontSize: '0.9rem', color: '#1e293b', flex: 1 }}>{opt}</span>
+              <span style={{ fontWeight: isSelected || isRight ? '700' : '500', fontSize: '0.9rem', color: 'var(--text-primary)', flex: 1 }}>{opt}</span>
               {isRight && <CheckCircle size={16} color="#16a34a" />}
               {isWrong && <XCircle size={16} color="#ef4444" />}
             </button>
@@ -188,6 +188,16 @@ const StudentJumbleQuiz = () => {
   const [flags, setFlags] = useState(0);
   const [activeAttemptId, setActiveAttemptId] = useState(null);
   const timerRef = useRef(null);
+  const answersRef = useRef({});
+  const flagsRef = useRef(0);
+
+  const activeAttemptIdRef = useRef(null);
+
+  useEffect(() => {
+    answersRef.current = answers;
+    flagsRef.current = flags;
+    activeAttemptIdRef.current = activeAttemptId;
+  }, [answers, flags, activeAttemptId]);
 
   useEffect(() => {
     const activeUser = JSON.parse(localStorage.getItem('user'));
@@ -251,17 +261,7 @@ const StudentJumbleQuiz = () => {
     }
   }, [exam, submitted]);
 
-  useEffect(() => {
-    if (!exam || submitted || !user) return;
-    const onHide = () => {
-      if (document.hidden) {
-        setFlags(prev => { const n = prev + 1; socket.emit('student_update', { id: user.id, flags: n, status: 'suspicious' }); return n; });
-        alert('WARNING: Tab switching detected! This has been logged.');
-      }
-    };
-    document.addEventListener('visibilitychange', onHide);
-    return () => document.removeEventListener('visibilitychange', onHide);
-  }, [exam, submitted, user]);
+  // Cheating detection removed as requested
 
   const fmt = (s) => `${Math.floor(s / 60)}:${(s % 60 < 10 ? '0' : '')}${s % 60}`;
 
@@ -269,16 +269,17 @@ const StudentJumbleQuiz = () => {
 
   const handleSubmit = async () => {
     if (!exam || submitted) return;
+    const currentAnswers = answersRef.current;
     let cal = 0;
     exam.questions.forEach((q, idx) => {
       if (q.type === 'Jumble') {
         try {
           const correct = JSON.parse(q.correct_answer);
-          const student = answers[idx] || q.words;
+          const student = currentAnswers[idx] || q.words;
           if (JSON.stringify(student.filter(Boolean)) === JSON.stringify(correct)) cal += (q.marks || 1);
         } catch {}
       } else if (q.type === 'MCQ') {
-        if (answers[idx] === q.correct_answer) cal += (q.marks || 1);
+        if (currentAnswers[idx] === q.correct_answer) cal += (q.marks || 1);
       }
     });
     setScore(cal);
@@ -286,14 +287,15 @@ const StudentJumbleQuiz = () => {
     clearInterval(timerRef.current);
 
     try {
-      if (activeAttemptId) {
-        await fetch(`${API_BASE_URL}/api/attempts/${activeAttemptId}/submit`, {
+      const currentAttemptId = activeAttemptIdRef.current;
+      if (currentAttemptId) {
+        await fetch(`${API_BASE_URL}/api/attempts/${currentAttemptId}/submit`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            score: cal, flags, status: 'completed',
+            score: cal, flags: flagsRef.current, status: 'completed',
             answers: exam.questions.map((q, idx) => ({
               question_id: q._id,
-              answer: q.type === 'Jumble' ? JSON.stringify(answers[idx] || q.words) : (answers[idx] || '')
+              answer: q.type === 'Jumble' ? JSON.stringify(currentAnswers[idx] || q.words) : (currentAnswers[idx] || '')
             }))
           })
         });

@@ -132,7 +132,9 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         await Exam.findByIdAndDelete(req.params.id);
-        res.json({ message: 'Exam deleted permanently' });
+        const Attempt = require('../models/Attempt');
+        await Attempt.deleteMany({ exam: req.params.id });
+        res.json({ message: 'Exam and related attempts deleted permanently' });
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
     }

@@ -74,6 +74,8 @@ app.use('/api/attempts', require('./routes/attemptRoutes'));
 app.use('/api/days', require('./routes/dayRoutes'));
 app.use('/api/groups', require('./routes/groupRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/announcements', require('./routes/announcementRoutes'));
+app.use('/api/feedback', require('./routes/feedbackRoutes'));
 
 const PORT = process.env.PORT || 5001;
 

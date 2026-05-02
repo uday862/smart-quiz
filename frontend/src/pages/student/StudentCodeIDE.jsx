@@ -19,6 +19,16 @@ const StudentQuizMode = () => {
   const [flags, setFlags] = useState(0);
   const [activeAttemptId, setActiveAttemptId] = useState(null);
   const timerRef = useRef(null);
+  const answersRef = useRef({});
+  const flagsRef = useRef(0);
+
+  const activeAttemptIdRef = useRef(null);
+
+  useEffect(() => {
+    answersRef.current = answers;
+    flagsRef.current = flags;
+    activeAttemptIdRef.current = activeAttemptId;
+  }, [answers, flags, activeAttemptId]);
 
   useEffect(() => {
     const activeUser = JSON.parse(localStorage.getItem('user'));
@@ -109,41 +119,7 @@ const StudentQuizMode = () => {
     }
   }, [exam, submitted]);
 
-  // CHEATING DETECTION LOGIC
-  useEffect(() => {
-    if (!exam || submitted || !user) return;
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        setFlags(prev => {
-          const newFlags = prev + 1;
-          socket.emit('student_update', { id: user.id, flags: newFlags, status: 'suspicious' });
-          return newFlags;
-        });
-        alert('WARNING: Tab switching detected! This incident has been logged.');
-      }
-    };
-
-    const handleCopyPaste = (e) => {
-      e.preventDefault();
-      setFlags(prev => {
-        const newFlags = prev + 1;
-        socket.emit('student_update', { id: user.id, flags: newFlags, status: 'Suspicious (Copy/Paste)' });
-        return newFlags;
-      });
-      alert('WARNING: Copy/Paste is strictly prohibited! This incident has been logged.');
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    document.addEventListener('copy', handleCopyPaste);
-    document.addEventListener('paste', handleCopyPaste);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      document.removeEventListener('copy', handleCopyPaste);
-      document.removeEventListener('paste', handleCopyPaste);
-    };
-  }, [exam, submitted, user]);
+  // Removed CHEATING DETECTION LOGIC as requested by user
 
   useEffect(() => {
     // Blast live updates on changes
@@ -171,9 +147,10 @@ const StudentQuizMode = () => {
     if (e?.preventDefault) e.preventDefault();
     if (!exam || submitted) return;
     
+    const currentAnswers = answersRef.current;
     let calculatedScore = 0;
     exam.questions.forEach(q => {
-      if (q.type === 'MCQ' && answers[q._id] === q.correct_answer) {
+      if (q.type === 'MCQ' && currentAnswers[q._id] === q.correct_answer) {
         calculatedScore += q.marks || 1;
       }
     });
@@ -184,15 +161,16 @@ const StudentQuizMode = () => {
 
     // Save to DB via PUT
     try {
-      if (activeAttemptId) {
-        await fetch(`${API_BASE_URL}/api/attempts/${activeAttemptId}/submit`, {
+      const currentAttemptId = activeAttemptIdRef.current;
+      if (currentAttemptId) {
+        await fetch(`${API_BASE_URL}/api/attempts/${currentAttemptId}/submit`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             score: calculatedScore,
-            flags: flags,
+            flags: flagsRef.current,
             status: 'completed',
-            answers: Object.keys(answers).map(key => ({ question_id: key, answer: answers[key] }))
+            answers: Object.keys(currentAnswers).map(key => ({ question_id: key, answer: currentAnswers[key] }))
           })
         });
       }
@@ -235,7 +213,7 @@ const StudentQuizMode = () => {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', background: 'var(--bg-color)' }}>
         
         {/* Left Pane (Questions) */}
-        <div style={{ flex: '2', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-color)', background: 'white' }}>
+        <div style={{ flex: '2', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-color)', background: 'var(--surface-color)' }}>
           
           <div style={{ padding: '1.5rem', background: '#f1f5f9', borderBottom: '1px solid var(--border-color)' }}>
             <h2 style={{ fontSize: '1.125rem', fontWeight: '600' }}>{isCoding ? 'Problem Statement' : 'Multiple Choice Questions'}</h2>
@@ -244,7 +222,7 @@ const StudentQuizMode = () => {
           <div style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
             {exam.questions.map((q, idx) => (
               <div key={q._id || idx} style={{ marginBottom: '2.5rem', padding: '1.5rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '1rem', lineHeight: '1.5' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '1rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
                   <span style={{ color: 'var(--primary-color)', marginRight: '0.5rem' }}>Q{idx + 1}.</span> {q.text}
                 </h3>
                 
@@ -293,7 +271,7 @@ const StudentQuizMode = () => {
         </div>
 
         {/* Right Pane (Submit / Summary) */}
-        <div style={{ flex: '1', display: 'flex', flexDirection: 'column', background: 'white' }}>
+        <div style={{ flex: '1', display: 'flex', flexDirection: 'column', background: 'var(--surface-color)' }}>
           
           <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
             <span style={{ fontWeight: '600', fontSize: '1.125rem' }}>Action Panel</span>
@@ -329,7 +307,7 @@ const StudentQuizMode = () => {
                        return (
                          <div key={idx} style={{ 
                            height: '35px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', 
-                           border: '1px solid #cbd5e1', background: 'white', position: 'relative', borderRadius: '2px'
+                           border: '1px solid #cbd5e1', background: 'var(--surface-color)', position: 'relative', borderRadius: '2px'
                          }}>
                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', flex: 1, display: 'flex', alignItems: 'center' }}>{idx + 1}</div>
                            <div style={{ width: '100%', height: '10px', background: isAttempted ? '#16a34a' : '#dc2626', opacity: 0.8 }}></div>

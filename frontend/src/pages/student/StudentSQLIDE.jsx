@@ -181,7 +181,7 @@ const StudentSQLIDE = () => {
         <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto', fontFamily: 'sans-serif' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #ddd', paddingBottom: '1rem' }}>
                 <div>
-                   <h1 style={{ fontWeight: '900', color: '#071125', margin: 0, fontSize: '2rem' }}>{exam.title}</h1>
+                   <h1 style={{ fontWeight: '900', color: 'var(--text-primary)', margin: 0, fontSize: '2rem' }}>{exam.title}</h1>
                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem', color: '#64748b', fontSize: '0.85rem', fontWeight: 'bold' }}>
                       <Database size={14} /> Local ALASQL Runtime Engine Active
                    </div>
@@ -205,8 +205,8 @@ const StudentSQLIDE = () => {
             <div style={{ display: 'flex', gap: '2.5rem', minHeight: '600px' }}>
                 {/* Information Panel */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.5rem', maxHeight: '50%', overflowY: 'auto' }}>
-                       <h3 style={{ margin: 0, marginBottom: '1rem', color: '#071125', fontWeight: '900', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>Scenario Brief</h3>
+                    <div style={{ background: 'var(--surface-color)', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.5rem', maxHeight: '50%', overflowY: 'auto' }}>
+                       <h3 style={{ margin: 0, marginBottom: '1rem', color: 'var(--text-primary)', fontWeight: '900', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>Scenario Brief</h3>
                        <p style={{ color: '#334155', fontSize: '0.95rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{currentQ.text}</p>
                        
                        {currentQ.sample_input && (
@@ -247,8 +247,8 @@ const StudentSQLIDE = () => {
 
                 {/* Validation Render Panel */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                        <h3 style={{ margin: 0, marginBottom: '1rem', color: '#071125', fontWeight: '900', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>Simulation Results</h3>
+                    <div style={{ background: 'var(--surface-color)', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <h3 style={{ margin: 0, marginBottom: '1rem', color: 'var(--text-primary)', fontWeight: '900', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>Simulation Results</h3>
                         
                         {error && (
                             <div style={{ padding: '1rem', background: '#fef2f2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '4px', fontFamily: 'monospace' }}>
@@ -289,7 +289,7 @@ const StudentSQLIDE = () => {
                                               <div style={{ flex: 1, marginTop: '0.5rem', padding: '1rem', background: '#f0fdf4', border: '1px dashed #bbf7d0', borderRadius: '4px' }}>
                                                   <h5 style={{ margin: '0 0 0.5rem 0', color: '#16a34a' }}>Expected Target Output:</h5>
                                                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-                                                    <thead><tr style={{ background: '#fff' }}>
+                                                    <thead><tr style={{ background: 'var(--surface-color)' }}>
                                                        {res.expected.length > 0 ? Object.keys(res.expected[0]).map(k => <th key={k} style={{ padding: '0.5rem', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>{k}</th>) : <th>(Empty Output)</th>}
                                                     </tr></thead>
                                                     <tbody>
