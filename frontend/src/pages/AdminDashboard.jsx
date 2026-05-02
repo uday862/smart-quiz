@@ -1368,7 +1368,7 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* ─── ACCESS CONTROL ─── */}
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden' }}>
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', flexShrink: 0 }}>
                   <div style={{ padding: '0.75rem 1rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                     <div style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Task Access Control</div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1382,7 +1382,7 @@ const AdminDashboard = () => {
                   </div>
 
                   {tAssignMode === 'groups' && (
-                    <div style={{ padding: '0.75rem 1rem', maxHeight: '240px', overflowY: 'auto' }}>
+                    <div style={{ padding: '0.75rem 1rem', minHeight: '180px', maxHeight: '240px', overflowY: 'auto' }}>
                       {groups.length === 0 ? (
                         <div style={{ color: '#94a3b8', fontSize: '0.82rem', padding: '1rem', textAlign: 'center' }}>No groups created yet. Go to the Groups tab to create one.</div>
                       ) : (
@@ -1405,7 +1405,7 @@ const AdminDashboard = () => {
                   )}
 
                   {tAssignMode === 'students' && (
-                    <div style={{ padding: '0.75rem 1rem', maxHeight: '240px', overflowY: 'auto' }}>
+                    <div style={{ padding: '0.75rem 1rem', minHeight: '180px', maxHeight: '240px', overflowY: 'auto' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem', cursor: 'pointer' }}>
                         <input type="checkbox" checked={tAllowedUsers.length === 0} onChange={() => setTAllowedUsers([])} />
                         <span style={{ fontWeight: 'bold' }}>All Students</span>
