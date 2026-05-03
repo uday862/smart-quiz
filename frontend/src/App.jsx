@@ -15,29 +15,29 @@ import LoginPage from './pages/LoginPage';
 import API_BASE_URL from './config';
 import './App.css';
 import SimpleChatbot from './pages/student/SimpleChatbot';
+import { useAuth } from './contexts/AuthContext';
 import { AdminProtectedRoute, StudentProtectedRoute } from './components/ProtectedRoute';
 import { Moon, Sun } from 'lucide-react';
 
 /* ─────────── Dark Mode Toggle Removed ─────────── */
 
 /* ─────────── Admin Layout ─────────── */
-const AdminLayout = ({ children }) => (
+const AdminLayout = (props) => {
+  const { logout } = useAuth();
+  return (
   <div className="app-container">
     <nav className="sidebar">
       <div className="brand" style={{ background: '#0f172a', color: 'white', padding: '1.5rem', fontWeight: '900', fontStyle: 'italic', letterSpacing: '1px', fontSize: '1.5rem' }}>SMART QUIZ</div>
       <ul className="nav-links">
         <li><Link to="/admin">Dashboard</Link></li>
         <li><Link to="/admin/analytics">Analytics</Link></li>
-        <li><Link to="/" onClick={() => { 
-          localStorage.removeItem('user'); 
-          localStorage.removeItem('token');
-          window.location.href = '/'; 
-        }} style={{ color: 'var(--danger-color)', marginTop: '2rem' }}>Logout</Link></li>
+        <li style={{ color: 'var(--danger-color)', marginTop: '2rem', cursor: 'pointer' }} onClick={() => logout()}>Logout</li>
       </ul>
     </nav>
-    <main className="main-content">{children}</main>
+    <main className="main-content">{props.children}</main>
   </div>
-);
+  );
+};
 
 /* ─────────── Notification Bell ─────────── */
 const NotificationBell = ({ userId }) => {
@@ -145,7 +145,8 @@ const NotificationBell = ({ userId }) => {
 };
 
 /* ─────────── Student Layout ─────────── */
-const StudentLayout = ({ children }) => {
+const StudentLayout = (props) => {
+  const { logout } = useAuth();
   const user = JSON.parse(localStorage.getItem('user'));
   const location = useLocation();
   const navigate = useNavigate();
@@ -208,7 +209,7 @@ const StudentLayout = ({ children }) => {
             <span style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.8)', fontWeight: '600' }}>{user?.name}</span>
           </div>
           <button
-            onClick={() => { localStorage.removeItem('user'); localStorage.removeItem('token'); navigate('/'); }}
+            onClick={() => logout()}
             style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', padding: '0.3rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700' }}
           >
             Log out
@@ -238,7 +239,7 @@ const StudentLayout = ({ children }) => {
       )}
 
       <main style={{ flex: 1, background: 'var(--bg-color)' }}>
-        {children}
+        {props.children}
       </main>
       {user && <SimpleChatbot userId={user.id} />}
     </div>
