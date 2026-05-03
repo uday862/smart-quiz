@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import AdminDashboard from './pages/AdminDashboard';
 import LiveMonitoring from './pages/LiveMonitoring';
 import Analytics from './pages/Analytics';
@@ -15,6 +15,7 @@ import LoginPage from './pages/LoginPage';
 import API_BASE_URL from './config';
 import './App.css';
 import SimpleChatbot from './pages/student/SimpleChatbot';
+import { AdminProtectedRoute, StudentProtectedRoute } from './components/ProtectedRoute';
 import { Moon, Sun } from 'lucide-react';
 
 /* ─────────── Dark Mode Toggle Removed ─────────── */
@@ -27,7 +28,11 @@ const AdminLayout = ({ children }) => (
       <ul className="nav-links">
         <li><Link to="/admin">Dashboard</Link></li>
         <li><Link to="/admin/analytics">Analytics</Link></li>
-        <li><Link to="/" onClick={() => { localStorage.removeItem('user'); }} style={{ color: 'var(--danger-color)', marginTop: '2rem' }}>Logout</Link></li>
+        <li><Link to="/" onClick={() => { 
+          localStorage.removeItem('user'); 
+          localStorage.removeItem('token');
+          window.location.href = '/'; 
+        }} style={{ color: 'var(--danger-color)', marginTop: '2rem' }}>Logout</Link></li>
       </ul>
     </nav>
     <main className="main-content">{children}</main>
@@ -53,7 +58,7 @@ const NotificationBell = ({ userId }) => {
   useEffect(() => {
     if (userId) {
       fetchNotifs();
-      const interval = setInterval(fetchNotifs, 30000); // poll every 30s
+      const interval = setInterval(fetchNotifs, 30000);
       return () => clearInterval(interval);
     }
   }, [userId]);
@@ -126,7 +131,7 @@ const NotificationBell = ({ userId }) => {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: n.isRead ? '600' : '800', fontSize: '0.82rem', color: '#1e293b', marginBottom: '0.2rem' }}>{n.title}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.4 }}>{n.message}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: '1.4' }}>{n.message}</div>
                   <div style={{ fontSize: '0.67rem', color: '#94a3b8', marginTop: '0.3rem' }}>{new Date(n.createdAt).toLocaleString()}</div>
                 </div>
                 {!n.isRead && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', flexShrink: 0, marginTop: '4px' }} />}
@@ -203,7 +208,7 @@ const StudentLayout = ({ children }) => {
             <span style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.8)', fontWeight: '600' }}>{user?.name}</span>
           </div>
           <button
-            onClick={() => { localStorage.removeItem('user'); navigate('/'); }}
+            onClick={() => { localStorage.removeItem('user'); localStorage.removeItem('token'); navigate('/'); }}
             style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', padding: '0.3rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700' }}
           >
             Log out
@@ -243,12 +248,12 @@ const StudentLayout = ({ children }) => {
 /* ─────────── App ─────────── */
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<LoginPage />} />
+    <Routes>
+      <Route path="/" element={<LoginPage />} />
 
-        {/* Admin Routes */}
-        <Route path="/admin/*" element={
+      {/* Admin Routes */}
+      <Route path="/admin/*" element={
+        <AdminProtectedRoute>
           <AdminLayout>
             <Routes>
               <Route path="/" element={<AdminDashboard />} />
@@ -256,10 +261,12 @@ function App() {
               <Route path="/analytics" element={<Analytics />} />
             </Routes>
           </AdminLayout>
-        } />
+        </AdminProtectedRoute>
+      } />
 
-        {/* Student Routes */}
-        <Route path="/student/*" element={
+      {/* Student Routes */}
+      <Route path="/student/*" element={
+        <StudentProtectedRoute>
           <StudentLayout>
             <Routes>
               <Route path="/" element={<StudentDashboard tab="Dashboard" />} />
@@ -275,10 +282,11 @@ function App() {
               <Route path="/jumble/:id" element={<StudentJumbleQuiz />} />
             </Routes>
           </StudentLayout>
-        } />
-      </Routes>
-    </Router>
+        </StudentProtectedRoute>
+      } />
+    </Routes>
   );
 }
 
 export default App;
+

@@ -1,13 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import API_BASE_URL from '../config';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const LoginPage = () => {
+
   const navigate = useNavigate();
+  const { user, login, isAuthenticated } = useAuth();
   const [role, setRole] = useState('student');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (user.role === 'admin') navigate('/admin', { replace: true });
+      else if (user.role === 'student') navigate('/student', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const showToast = (msg, type = 'success') => {
     setToast({ show: true, message: msg, type });
@@ -34,13 +44,8 @@ const LoginPage = () => {
         return;
       }
       
-      localStorage.setItem('user', JSON.stringify(data.user));
+      login(data.user, data.token);
       showToast(`${role === 'admin' ? 'Administrator' : 'Student'} Session Verified!`);
-      
-      setTimeout(() => {
-        if (role === 'admin') navigate('/admin');
-        else navigate('/student');
-      }, 1000);
 
     } catch (err) {
       showToast('Network error. Is server running?', 'error');

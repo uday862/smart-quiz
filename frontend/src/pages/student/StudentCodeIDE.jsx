@@ -106,18 +106,17 @@ const StudentQuizMode = () => {
   useEffect(() => {
     if (exam && !submitted && timeLeft > 0) {
       timerRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            handleSubmit(new Event('submit'));
-            return 0;
-          }
-          return prev - 1;
-        });
+        setTimeLeft(prev => Math.max(0, prev - 1));
       }, 1000);
       return () => clearInterval(timerRef.current);
     }
   }, [exam, submitted]);
+
+  useEffect(() => {
+    if (exam && !submitted && timeLeft === 0) {
+      handleSubmit(new Event('submit'));
+    }
+  }, [timeLeft, exam, submitted]);
 
   // Removed CHEATING DETECTION LOGIC as requested by user
 

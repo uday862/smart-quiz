@@ -255,11 +255,17 @@ const StudentJumbleQuiz = () => {
   useEffect(() => {
     if (exam && !submitted && timeLeft > 0) {
       timerRef.current = setInterval(() => {
-        setTimeLeft(prev => { if (prev <= 1) { clearInterval(timerRef.current); handleSubmit(); return 0; } return prev - 1; });
+        setTimeLeft(prev => Math.max(0, prev - 1));
       }, 1000);
       return () => clearInterval(timerRef.current);
     }
   }, [exam, submitted]);
+
+  useEffect(() => {
+    if (exam && !submitted && timeLeft === 0) {
+      handleSubmit();
+    }
+  }, [timeLeft, exam, submitted]);
 
   // Cheating detection removed as requested
 

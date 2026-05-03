@@ -19,6 +19,9 @@ const StudentDashboard = ({ tab }) => {
   const [leaderboardData, setLeaderboardData] = useState([]);
   const [selectedLeaderboardTaskName, setSelectedLeaderboardTaskName] = useState('');
   const [fetchingLeaderboard, setFetchingLeaderboard] = useState(false);
+  
+  // Dashboard Sub-tabs
+  const [dashboardFilter, setDashboardFilter] = useState('Unattempted');
 
 
   const fetchData = async () => {
@@ -144,7 +147,17 @@ const StudentDashboard = ({ tab }) => {
           
           {tab === 'Dashboard' && (
             <>
-              {getActiveTasks().length > 0 ? getActiveTasks().map(task => {
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', background: 'white', padding: '0.5rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                 <button onClick={() => setDashboardFilter('Unattempted')} style={{ flex: 1, padding: '0.75rem', borderRadius: '6px', fontWeight: 'bold', border: 'none', background: dashboardFilter === 'Unattempted' ? '#f36d44' : 'transparent', color: dashboardFilter === 'Unattempted' ? 'white' : '#64748b', cursor: 'pointer' }}>Unattempted</button>
+                 <button onClick={() => setDashboardFilter('Attempted')} style={{ flex: 1, padding: '0.75rem', borderRadius: '6px', fontWeight: 'bold', border: 'none', background: dashboardFilter === 'Attempted' ? '#16a34a' : 'transparent', color: dashboardFilter === 'Attempted' ? 'white' : '#64748b', cursor: 'pointer' }}>Attempted</button>
+              </div>
+              {(() => {
+                const filteredTasks = getActiveTasks().filter(task => {
+                  const att = getAttempt(task._id);
+                  const isCompleted = att?.status === 'completed';
+                  return dashboardFilter === 'Attempted' ? isCompleted : !isCompleted;
+                });
+                return filteredTasks.length > 0 ? filteredTasks.map(task => {
                 const att = getAttempt(task._id);
                 const isCompleted = att?.status === 'completed';
 
@@ -205,8 +218,8 @@ const StudentDashboard = ({ tab }) => {
                     </div>
                   );
                 }) : (
-                <div style={{ padding: '6rem', textAlign: 'center', background: 'var(--surface-color)', borderRadius: '4px', color: '#bbb', border: '1px dashed #ddd' }}>No active for now</div>
-              )}
+                <div style={{ padding: '6rem', textAlign: 'center', background: 'var(--surface-color)', borderRadius: '4px', color: '#bbb', border: '1px dashed #ddd' }}>No {dashboardFilter.toLowerCase()} active tasks for now</div>
+              );})()}
             </>
           )}
 
@@ -337,7 +350,10 @@ const StudentDashboard = ({ tab }) => {
             )}
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
                <button onClick={() => setAttemptTask(null)} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: 'var(--surface-color)', color: '#475569', fontWeight: 'bold', cursor: 'pointer' }}>CANCEL</button>
-               {attemptTask.notes && <button onClick={() => {}} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>STUDY</button>}
+               {attemptTask.notes && <button onClick={() => { 
+                   if (attemptTask.notes.startsWith('http')) { window.open(attemptTask.notes, '_blank'); } 
+                   else { const win = window.open('', '_blank'); win.document.write(`<pre style="font-family: sans-serif; padding: 2rem; font-size: 1.2rem; white-space: pre-wrap;">${attemptTask.notes}</pre>`); }
+               }} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>STUDY IN NEW TAB</button>}
                <button onClick={() => { navigate(attemptPath); setAttemptTask(null); }} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>ATTEMPT</button>
             </div>
           </div>
