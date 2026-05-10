@@ -117,10 +117,11 @@ const StudentSQLIDE = () => {
                     truthOutput = alasql(adminAns);
                 }
 
-                const userStr = JSON.stringify(userOutput);
-                const truthStr = JSON.stringify(truthOutput);
+                const userStr = userOutput !== undefined ? JSON.stringify(userOutput) : 'null';
+                const truthStr = truthOutput !== undefined ? JSON.stringify(truthOutput) : 'null';
                 
-                const isMatch = (userStr === truthStr);
+                // Don't pass if both are just empty or null due to bad query
+                const isMatch = (userStr === truthStr) && userStr !== 'null' && userStr !== '[]';
                 if (isMatch) passed++;
                 
                 localResults.push({ id: i + 1, passed: isMatch, output: userOutput, expected: truthOutput, error: null });
@@ -133,10 +134,11 @@ const StudentSQLIDE = () => {
         }
 
         setResult(localResults);
-        const finalScore = Math.round((passed / exam.questions[0].test_cases.length || 1) * 100);
+        const totalTests = exam.questions[0].test_cases?.length || 1;
+        const finalScore = Math.round((passed / totalTests) * 100);
         
-        // Overwrite isPassed to contain the actual integer score 1-100 instead of true/false
-        setIsPassed(isPublicRun ? isPassed : finalScore);
+        // Preview score (SERVER score shown in Reports after submit)
+        setIsPassed(finalScore);
     };
 
     const handleSubmitAttempt = async () => {
@@ -162,8 +164,9 @@ const StudentSQLIDE = () => {
             });
 
             if (res.ok) {
-                alert(`Successfully saved to database with score: ${isPassed}/100`);
-                setLatestScore(isPassed);
+                const finalAttempt = await res.json();
+                alert(`Successfully saved to database! Server Validated Score: ${finalAttempt.score}/100`);
+                setLatestScore(finalAttempt.score);
             } else {
                 alert('An error occurred updating the database submission record.');
             }
@@ -193,11 +196,31 @@ const StudentSQLIDE = () => {
                       </div>
                   )}
                   <button 
+                    onClick={async () => {
+                      if (!exam?._id || !user?.id) return alert('Session error');
+                      const res = await fetch(`${API_BASE_URL}/api/attempts/start`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ student: user.id, exam: exam._id })
+                      });
+                      const attemptData = await res.json();
+                      await fetch(`${API_BASE_URL}/api/attempts/${attemptData._id}/save-query`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query })
+                      });
+                      alert('Query saved!');
+                    }}
+                    style={{ background: '#3b82f6', color: 'white', padding: '0.75rem 1.5rem', fontWeight: '900', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}
+                  >
+                     <Save size={16} /> SAVE CODE
+                  </button>
+                  <button 
                     onClick={handleSubmitAttempt}
                     disabled={!result}
                     style={{ background: result ? '#16a34a' : '#cbd5e1', color: 'white', padding: '0.75rem 2rem', fontWeight: '900', border: 'none', borderRadius: '4px', cursor: result ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                   >
-                     <Save size={16} /> SUBMIT TO DB
+                     <Save size={16} /> SUBMIT FOR SCORING
                   </button>
                 </div>
             </div>

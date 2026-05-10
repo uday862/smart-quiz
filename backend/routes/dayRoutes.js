@@ -66,7 +66,7 @@ router.delete('/:id', async (req, res) => {
     try {
         await Day.findByIdAndDelete(req.params.id);
         await Exam.deleteMany({ dayId: req.params.id });
-        res.json({ message: 'Module deleted successfully' });
+        res.json({ message: 'Module and tasks deleted permanently' });
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
     }

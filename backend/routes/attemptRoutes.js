@@ -3,6 +3,25 @@ const router = express.Router();
 const Attempt = require('../models/Attempt');
 
 
+// Save query draft (no score, no complete)
+router.post('/:id/save-query', async (req, res) => {
+    try {
+        const { query } = req.body;
+        const attempt = await Attempt.findById(req.params.id);
+        
+        if (attempt.answers && attempt.answers.length > 0) {
+            attempt.answers[0].answer = query;
+        } else {
+            attempt.answers = [{ question_id: attempt.exam.questions[0]._id, answer: query }];
+        }
+        
+        await attempt.save();
+        res.json({ message: 'Query saved', attempt });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
 // Get generic attempt by ID
 router.get('/:id', async (req, res) => {
     try {
@@ -55,10 +74,82 @@ router.post('/start', async (req, res) => {
 // Submit/Update an attempt
 router.put('/:id/submit', async (req, res) => {
     try {
-        const { score, status, answers, flags } = req.body;
+        const { score: clientScore, status, answers, flags } = req.body;
         const attempt = await Attempt.findById(req.params.id).populate('exam', 'title questions');
         
-        attempt.score = score;
+        let finalScore = clientScore;
+        
+        // Server-side SQL validation for SQL questions (FIXED ASYNC)
+        if (attempt.exam?.questions?.[0]?.type === 'SQL' && answers?.[0]?.answer) {
+            const sqlite3 = require('sqlite3').verbose();
+            const fs = require('fs');
+            const path = require('path');
+            const util = require('util');
+            const tmpDir = path.join(__dirname, '..', 'tmp');
+            if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
+            const dbPath = path.join(tmpDir, `sql_test_${Date.now()}.db`);
+            
+            try {
+                const q = attempt.exam.questions[0];
+                const testCases = q.test_cases || [];
+                const userQuery = answers[0].answer.trim();
+                let passed = 0;
+                
+                const db = new sqlite3.Database(dbPath);
+                const execAsync = util.promisify(db.exec.bind(db));
+                const allAsync = util.promisify(db.all.bind(db));
+                
+                for (const tc of testCases) {
+                    if (!tc.input || !tc.output) continue;
+                    
+                    try {
+                        await execAsync('BEGIN TRANSACTION');
+                        
+                        // Load test data
+                        await execAsync(tc.input);
+                        
+                        // Execute user query
+                        const rows = await allAsync(userQuery);
+                        
+                        const userOutputStr = JSON.stringify(rows.sort((a,b) => {
+                            const sa = JSON.stringify(a), sb = JSON.stringify(b);
+                            return sa > sb ? 1 : sa < sb ? -1 : 0;
+                        }));
+                        const expectedStr = tc.output.trim();
+                        
+                        if (userOutputStr === expectedStr) passed++;
+                        
+                        await execAsync('ROLLBACK');
+                    } catch (tcErr) {
+                        console.error(`Test case failed:`, tcErr.message);
+                    }
+                }
+                
+                db.close();
+                
+                const questionMarks = q.marks || 100;
+                finalScore = testCases.length > 0 ? Math.round((passed / testCases.length) * questionMarks) : 0;
+                
+                // Store validation info
+                answers[0].server_validation = {
+                    passed,
+                    total: testCases.length,
+                    score: finalScore,
+                    client_claimed: clientScore
+                };
+                
+                if (clientScore !== finalScore) {
+                    console.log(`Score override: client ${clientScore} → server ${finalScore} for attempt ${attempt._id}`);
+                }
+            } catch (sqlErr) {
+                console.error('SQL validation error:', sqlErr);
+                finalScore = 0;
+            } finally {
+                if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+            }
+        }
+        
+        attempt.score = finalScore;
         attempt.status = status;
         attempt.answers = answers;
         attempt.flags = flags;
@@ -75,9 +166,9 @@ router.put('/:id/submit', async (req, res) => {
                     student: attempt.student,
                     type: 'score_updated',
                     title: '🏆 Score Updated!',
-                    message: `You scored ${score}/${total} in "${attempt.exam?.title || 'Task'}". Check your Reports for details.`,
+                    message: `You scored ${finalScore}/${total} in "${attempt.exam?.title || 'Task'}". Check your Reports for details.`,
                     examId: attempt.exam?._id,
-                    score,
+                    score: finalScore,
                     isRead: false
                 });
             } catch (notifErr) { console.error('Score notif error:', notifErr.message); }

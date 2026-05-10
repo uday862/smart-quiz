@@ -24,7 +24,9 @@ const examSchema = new mongoose.Schema({
     }],
     allowedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Array of student IDs, empty means all
     allowedGroups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Group' }], // Array of group IDs
-    isDeleted: { type: Boolean, default: false }
+    isDeleted: { type: Boolean, default: false },
+    isResource: { type: Boolean, default: false },
+    resourceFolderId: { type: mongoose.Schema.Types.ObjectId, ref: 'ResourceFolder' }
 
 }, { timestamps: true });
 

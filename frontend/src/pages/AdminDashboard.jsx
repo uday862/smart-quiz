@@ -51,6 +51,19 @@ const AdminDashboard = () => {
   const [groups, setGroups] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminTab, setAdminTab] = useState('Days');
+  const [resources, setResources] = useState([]);
+  const [resourceFolders, setResourceFolders] = useState([]);
+  const [showCloneModal, setShowCloneModal] = useState(false);
+  const [cloneTargetDay, setCloneTargetDay] = useState('');
+  const [cloningTask, setCloningTask] = useState(null);
+  
+  const [showPushModal, setShowPushModal] = useState(false);
+  const [pushingTask, setPushingTask] = useState(null);
+  const [pushTargetFolder, setPushTargetFolder] = useState('');
+  
+  const [newFolderName, setNewFolderName] = useState('');
+  const [expandedResourceFolders, setExpandedResourceFolders] = useState({});
+  const toggleResourceFolder = (folderId) => setExpandedResourceFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
 
   /* ─── Toast ─── */
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -221,8 +234,24 @@ const AdminDashboard = () => {
     } catch(e) {}
   };
 
+  const fetchResourceFolders = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/resource-folders`);
+      const data = await res.json();
+      setResourceFolders(Array.isArray(data) ? data : []);
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchResources = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/exams/resource-hub/all`);
+      const data = await res.json();
+      setResources(Array.isArray(data) ? data : []);
+    } catch (err) { console.error(err); }
+  };
+
   const handleGlobalRefresh = () => {
-    fetchStudents(); fetchDays(); fetchReports(); fetchGroups(); fetchAdmins(); fetchNews(); fetchFeedback();
+    fetchStudents(); fetchDays(); fetchReports(); fetchGroups(); fetchAdmins(); fetchNews(); fetchFeedback(); fetchResources(); fetchResourceFolders();
   };
 
   useEffect(() => { handleGlobalRefresh(); }, []);
@@ -396,6 +425,60 @@ const AdminDashboard = () => {
     });
   };
 
+  const handleOpenPushModal = (task) => {
+    setPushingTask(task);
+    setPushTargetFolder('');
+    setShowPushModal(true);
+  };
+
+  const handlePushToResource = async (e) => {
+    e.preventDefault();
+    if (!pushingTask) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/exams/${pushingTask._id}/move-to-resource`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId: pushTargetFolder || null })
+      });
+      if (res.ok) {
+        showToast('Task saved to Resource Hub');
+        fetchDays();
+        fetchResources();
+        setShowPushModal(false);
+      } else {
+        showToast('Failed to save', 'error');
+      }
+    } catch(err) { showToast('Error', 'error'); }
+  };
+
+  const handleCreateFolder = async (e) => {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/resource-folders`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newFolderName })
+      });
+      if (res.ok) {
+        setNewFolderName('');
+        fetchResourceFolders();
+        showToast('Folder created');
+      }
+    } catch(err) { showToast('Error', 'error'); }
+  };
+
+  const handleDeleteFolder = (id) => {
+    confirmAction('Delete this folder and ALL its resources?', async () => {
+      try {
+        await fetch(`${API_BASE_URL}/api/resource-folders/${id}`, { method: 'DELETE' });
+        fetchResourceFolders();
+        fetchResources();
+        showToast('Folder deleted');
+        setShowConfirmModal({ show: false });
+      } catch (err) { showToast('Delete failed', 'error'); }
+    });
+  };
+
   const handleStartTask = async (taskId) => {
     try { await fetch(`${API_BASE_URL}/api/exams/${taskId}/start`, { method: 'POST' }); fetchDays(); showToast('Task is LIVE'); }
     catch (err) { showToast('Start failed', 'error'); }
@@ -411,6 +494,23 @@ const AdminDashboard = () => {
     setTTitle(''); setTNotes(''); setTDesc(''); setTJson(''); setTTime(30); setTAttempts(1);
     setTAllowedUsers([]); setTAllowedGroups([]); setTAssignMode('all');
     setTTestCases([{ input: '', output: '' }]); setTSampleIn(''); setTSampleOut('');
+  };
+
+  const handleCloneResource = async (e) => {
+    e.preventDefault();
+    if (!cloneTargetDay || !cloningTask) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/exams/${cloningTask._id}/clone`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dayId: cloneTargetDay })
+      });
+      if (res.ok) {
+        showToast('Task cloned successfully to module!');
+        setShowCloneModal(false);
+        setCloningTask(null);
+        fetchDays();
+      } else { showToast('Failed to clone', 'error'); }
+    } catch(err) { showToast('Error cloning', 'error'); }
   };
 
   /* ══════════ Student Handlers ══════════ */
@@ -711,7 +811,7 @@ const AdminDashboard = () => {
 
       {/* ─── Tab Nav ─── */}
       <div style={{ marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '2rem' }}>
-        {['Days', 'Students', 'Groups', 'Reports', 'Admins'].map(tab => (
+        {['Days', 'Resource Hub', 'Students', 'Groups', 'Reports', 'Admins'].map(tab => (
           <button key={tab} onClick={() => setAdminTab(tab)}
             style={{ background: 'transparent', border: 'none', borderBottom: adminTab === tab ? '3px solid #f36d44' : 'none', padding: '0.75rem 0', fontWeight: 'bold', cursor: 'pointer', color: adminTab === tab ? '#f36d44' : '#64748b', fontSize: '1rem', transition: 'color 0.2s' }}>
             {tab.toUpperCase()}
@@ -782,6 +882,7 @@ const AdminDashboard = () => {
                                 <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end', alignItems: 'center' }}>
                                   <button onClick={() => handleShowPeople(t._id, t.title)} className="btn-icon" title="View Results"><Users size={18} color="#f36d44" /></button>
                                   <button onClick={() => handleEditTask(t)} className="btn-icon" title="Edit Task"><Edit3 size={18} color="#64748b" /></button>
+                                  <button onClick={() => handleOpenPushModal(t)} className="btn-icon" title="Save to Resource Hub"><Layers size={18} color="#4f46e5" /></button>
                                   {t.status === 'running' ? (
                                     <button onClick={() => handleStopTask(t._id)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '0.4rem 0.7rem', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Square size={14} /> STOP</button>
                                   ) : (
@@ -800,6 +901,95 @@ const AdminDashboard = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ══════════ RESOURCE HUB TAB ══════════ */}
+      {adminTab === 'Resource Hub' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div style={{ padding: '1rem 1.5rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h3 style={{ margin: 0, fontWeight: '900', color: 'var(--text-primary)' }}>Resource Hub</h3>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Manage templates in folders.</p>
+            </div>
+            <form onSubmit={handleCreateFolder} style={{ display: 'flex', gap: '0.5rem' }}>
+              <input value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="New Folder Name..." required style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+              <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>Create Folder</button>
+            </form>
+          </div>
+
+          {resourceFolders.map(folder => {
+            const folderResources = resources.filter(r => r.resourceFolderId === folder._id);
+            const isExpanded = expandedResourceFolders[folder._id];
+            return (
+              <div key={folder._id} style={{ borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', background: 'white', marginBottom: '1rem' }}>
+                <div onClick={() => toggleResourceFolder(folder._id)} style={{ padding: '0.75rem 1.5rem', background: '#f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                  <div style={{ fontWeight: 'bold', color: '#334155', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {isExpanded ? <ChevronDown size={18} color="#64748b"/> : <ChevronRight size={18} color="#64748b"/>}
+                    📁 {folder.name} <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'normal', marginLeft: '0.5rem' }}>({folderResources.length} items)</span>
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder._id); }} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button>
+                </div>
+                {isExpanded && folderResources.length > 0 && (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      {folderResources.map(r => (
+                        <tr key={r._id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '1rem 1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>{r.title}</td>
+                          <td style={{ textAlign: 'right', paddingRight: '1.5rem' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                              <button onClick={() => { setCloningTask(r); setCloneTargetDay(days[0]?._id || ''); setShowCloneModal(true); }} style={{ background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', padding: '0.4rem 0.8rem', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Layers size={14} /> Reuse</button>
+                              <button onClick={() => handleEditTask(r)} className="btn-icon" title="Edit Resource"><Edit3 size={18} color="#64748b" /></button>
+                              <button onClick={() => {
+                                confirmAction('Permanently delete this resource?', async () => {
+                                  try {
+                                    await fetch(`${API_BASE_URL}/api/exams/${r._id}`, { method: 'DELETE' });
+                                    fetchResources(); showToast('Resource Deleted');
+                                    setShowConfirmModal({ show: false });
+                                  } catch (err) { showToast('Delete failed', 'error'); }
+                                });
+                              }} style={{ color: '#ef4444', background: 'none', border: 'none', padding: '0.35rem', cursor: 'pointer' }}><Trash2 size={18} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })}
+          
+          {/* Uncategorized resources */}
+          {resources.filter(r => !r.resourceFolderId).length > 0 && (
+             <div style={{ borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', background: 'white' }}>
+                <div style={{ padding: '0.75rem 1.5rem', background: '#f8fafc', fontWeight: 'bold', color: '#334155' }}>Uncategorized Resources</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    {resources.filter(r => !r.resourceFolderId).map(r => (
+                      <tr key={r._id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '1rem 1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>{r.title}</td>
+                        <td style={{ textAlign: 'right', paddingRight: '1.5rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                            <button onClick={() => { setCloningTask(r); setCloneTargetDay(days[0]?._id || ''); setShowCloneModal(true); }} style={{ background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', padding: '0.4rem 0.8rem', fontWeight: 'bold', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Layers size={14} /> Reuse</button>
+                            <button onClick={() => handleEditTask(r)} className="btn-icon" title="Edit Resource"><Edit3 size={18} color="#64748b" /></button>
+                            <button onClick={() => {
+                              confirmAction('Permanently delete this resource?', async () => {
+                                try {
+                                  await fetch(`${API_BASE_URL}/api/exams/${r._id}`, { method: 'DELETE' });
+                                  fetchResources(); showToast('Resource Deleted');
+                                  setShowConfirmModal({ show: false });
+                                } catch (err) { showToast('Delete failed', 'error'); }
+                              });
+                            }} style={{ color: '#ef4444', background: 'none', border: 'none', padding: '0.35rem', cursor: 'pointer' }}><Trash2 size={18} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+             </div>
+          )}
         </div>
       )}
 
@@ -1593,6 +1783,61 @@ const AdminDashboard = () => {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Push to Hub Modal ─── */}
+      {showPushModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Push to Resource Hub</h2>
+              <button className="btn-icon" onClick={() => setShowPushModal(false)}><X size={20} /></button>
+            </div>
+            <form onSubmit={handlePushToResource} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Select a folder in the Resource Hub to save <b>"{pushingTask?.title}"</b> to:</p>
+              <div className="form-group">
+                <label style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>Resource Folder</label>
+                <select value={pushTargetFolder} onChange={e => setPushTargetFolder(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                  <option value="">-- Uncategorized --</option>
+                  {resourceFolders.map(f => (
+                    <option key={f._id} value={f._id}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+                <button type="button" className="btn btn-outline" onClick={() => setShowPushModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Push Task</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Clone Modal ─── */}
+      {showCloneModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Clone Task to Module</h2>
+              <button className="btn-icon" onClick={() => setShowCloneModal(false)}><X size={20} /></button>
+            </div>
+            <form onSubmit={handleCloneResource} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Select a target module to clone <b>"{cloningTask?.title}"</b> into:</p>
+              <div className="form-group">
+                <label style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>Target Module</label>
+                <select value={cloneTargetDay} onChange={e => setCloneTargetDay(e.target.value)} required style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                  {days.map(d => (
+                    <option key={d._id} value={d._id}>{d.dayNumber} - {d.title}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+                <button type="button" className="btn btn-outline" onClick={() => setShowCloneModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Clone Task</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

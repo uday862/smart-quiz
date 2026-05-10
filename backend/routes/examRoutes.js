@@ -53,6 +53,16 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Get Resource Hub tasks
+router.get('/resource-hub/all', async (req, res) => {
+    try {
+        const resources = await Exam.find({ isResource: true, isDeleted: { $ne: true } });
+        res.json(resources);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // Get single exam by ID
 router.get('/:id', async (req, res) => {
     try {
@@ -128,7 +138,63 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// Physical delete exam
+// Clone/Reuse task
+router.post('/:id/clone', async (req, res) => {
+    try {
+        const original = await Exam.findById(req.params.id);
+        if (!original) return res.status(404).json({ message: 'Task not found' });
+        
+        const { dayId } = req.body;
+        const examData = original.toObject();
+        delete examData._id;
+        delete examData.createdAt;
+        delete examData.updatedAt;
+        
+        if (dayId) {
+            examData.dayId = dayId;
+        } else {
+            delete examData.dayId;
+        }
+        
+        examData.isResource = false;
+        examData.status = 'not_started';
+        examData.title = examData.title + ' (Copy)';
+        
+        const newExam = new Exam(examData);
+        await newExam.save();
+        res.json(newExam);
+    } catch(err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Copy task to resource hub manually (leaves original in day)
+router.post('/:id/move-to-resource', async (req, res) => {
+    try {
+        const original = await Exam.findById(req.params.id);
+        if (!original) return res.status(404).json({ message: 'Task not found' });
+        
+        const examData = original.toObject();
+        delete examData._id;
+        delete examData.createdAt;
+        delete examData.updatedAt;
+        delete examData.dayId;
+        
+        examData.isResource = true;
+        examData.status = 'not_started';
+        if (req.body.folderId) {
+            examData.resourceFolderId = req.body.folderId;
+        }
+        
+        const resourceExam = new Exam(examData);
+        await resourceExam.save();
+        res.json(resourceExam);
+    } catch(err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
+// Physical delete
 router.delete('/:id', async (req, res) => {
     try {
         await Exam.findByIdAndDelete(req.params.id);

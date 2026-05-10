@@ -76,6 +76,7 @@ app.use('/api/groups', require('./routes/groupRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/announcements', require('./routes/announcementRoutes'));
 app.use('/api/feedback', require('./routes/feedbackRoutes'));
+app.use('/api/resource-folders', require('./routes/resourceFolderRoutes'));
 
 const PORT = process.env.PORT || 5001;
 

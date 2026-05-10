@@ -2,13 +2,20 @@ const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
 
-// Get all notifications for a student
+// Get all notifications for a student (Keep only top 10, delete rest)
 router.get('/:studentId', async (req, res) => {
     try {
-        const notifications = await Notification.find({ student: req.params.studentId })
-            .sort({ createdAt: -1 })
-            .limit(50);
-        res.json(notifications);
+        const studentId = req.params.studentId;
+        const notifications = await Notification.find({ student: studentId })
+            .sort({ createdAt: -1 });
+            
+        // Enforce max 10 notifications limit and delete the rest
+        if (notifications.length > 10) {
+            const idsToDelete = notifications.slice(10).map(n => n._id);
+            await Notification.deleteMany({ _id: { $in: idsToDelete } });
+        }
+        
+        res.json(notifications.slice(0, 10));
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -49,6 +56,16 @@ router.post('/', async (req, res) => {
     try {
         const notif = new Notification(req.body);
         await notif.save();
+        
+        // Auto cleanup if exceeds 10
+        if (req.body.student) {
+            const studentNotifs = await Notification.find({ student: req.body.student }).sort({ createdAt: -1 });
+            if (studentNotifs.length > 10) {
+                const idsToDelete = studentNotifs.slice(10).map(n => n._id);
+                await Notification.deleteMany({ _id: { $in: idsToDelete } });
+            }
+        }
+        
         res.status(201).json(notif);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
