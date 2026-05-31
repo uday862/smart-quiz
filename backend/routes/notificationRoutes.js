@@ -1,11 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 // Get all notifications for a student (Keep only top 10, delete rest)
-router.get('/:studentId', async (req, res) => {
+router.get('/:studentId', requireAuth, async (req, res) => {
     try {
         const studentId = req.params.studentId;
+        
+        if (req.user.role !== 'admin' && String(studentId) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
         const notifications = await Notification.find({ student: studentId })
             .sort({ createdAt: -1 });
             
@@ -22,9 +28,15 @@ router.get('/:studentId', async (req, res) => {
 });
 
 // Get unread count
-router.get('/:studentId/unread-count', async (req, res) => {
+router.get('/:studentId/unread-count', requireAuth, async (req, res) => {
     try {
-        const count = await Notification.countDocuments({ student: req.params.studentId, isRead: false });
+        const studentId = req.params.studentId;
+        
+        if (req.user.role !== 'admin' && String(studentId) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        const count = await Notification.countDocuments({ student: studentId, isRead: false });
         res.json({ count });
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
@@ -32,9 +44,17 @@ router.get('/:studentId/unread-count', async (req, res) => {
 });
 
 // Mark one as read
-router.put('/:id/read', async (req, res) => {
+router.put('/:id/read', requireAuth, async (req, res) => {
     try {
-        await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
+        const notification = await Notification.findById(req.params.id);
+        if (!notification) return res.status(404).json({ message: 'Notification not found' });
+
+        if (req.user.role !== 'admin' && String(notification.student) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        notification.isRead = true;
+        await notification.save();
         res.json({ message: 'Marked as read' });
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
@@ -42,17 +62,23 @@ router.put('/:id/read', async (req, res) => {
 });
 
 // Mark all as read for a student
-router.put('/student/:studentId/read-all', async (req, res) => {
+router.put('/student/:studentId/read-all', requireAuth, async (req, res) => {
     try {
-        await Notification.updateMany({ student: req.params.studentId, isRead: false }, { isRead: true });
+        const studentId = req.params.studentId;
+        
+        if (req.user.role !== 'admin' && String(studentId) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        await Notification.updateMany({ student: studentId, isRead: false }, { isRead: true });
         res.json({ message: 'All marked as read' });
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
     }
 });
 
-// Create a notification (internal use by other routes via helper)
-router.post('/', async (req, res) => {
+// Create a notification
+router.post('/', requireAdmin, async (req, res) => {
     try {
         const notif = new Notification(req.body);
         await notif.save();

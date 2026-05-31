@@ -147,38 +147,42 @@ const StudentQuizMode = () => {
     if (!exam || submitted) return;
     
     const currentAnswers = answersRef.current;
-    let calculatedScore = 0;
-    exam.questions.forEach(q => {
-      if (q.type === 'MCQ' && currentAnswers[q._id] === q.correct_answer) {
-        calculatedScore += q.marks || 1;
-      }
-    });
-
-    setScore(calculatedScore);
+    
+    // Server will evaluate
+    setScore(0);
     setSubmitted(true);
     clearInterval(timerRef.current);
 
     // Save to DB via PUT
     try {
       const currentAttemptId = activeAttemptIdRef.current;
+      let finalScore = 0;
+      let passStatus = false;
       if (currentAttemptId) {
-        await fetch(`${API_BASE_URL}/api/attempts/${currentAttemptId}/submit`, {
+        const res = await fetch(`${API_BASE_URL}/api/attempts/${currentAttemptId}/submit`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            score: calculatedScore,
+            score: 0,
             flags: flagsRef.current,
             status: 'completed',
             answers: Object.keys(currentAnswers).map(key => ({ question_id: key, answer: currentAnswers[key] }))
           })
         });
+        const updatedAttempt = await res.json();
+        finalScore = updatedAttempt.score || 0;
+        setScore(finalScore);
+        if (updatedAttempt.exam) {
+            setExam(updatedAttempt.exam);
+            passStatus = finalScore > (updatedAttempt.exam.questions.length / 2);
+        }
       }
 
       socket.emit('student_update', {
         id: user.id,
         status: 'completed',
-        marks: calculatedScore,
-        stars: calculatedScore > (exam.questions.length / 2) ? 5 : 2
+        marks: finalScore,
+        stars: passStatus ? 5 : 2
       });
       
       setTimeout(() => navigate(`/student/summary/${exam._id}`), 3000);

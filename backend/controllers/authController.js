@@ -74,6 +74,9 @@ exports.registerAdmin = async (req, res) => {
 exports.updatePassword = async (req, res) => {
     try {
         const { userId, newPassword } = req.body;
+        if (req.user.role !== 'admin' && String(userId) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(newPassword, salt);
         await User.findByIdAndUpdate(userId, { password: hashedPassword });
@@ -87,6 +90,9 @@ exports.updatePassword = async (req, res) => {
 exports.updateProfile = async (req, res) => {
     try {
         const { userId, email, phone, name } = req.body;
+        if (req.user.role !== 'admin' && String(userId) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
         const updateData = {};
         if (email !== undefined) updateData.email = email;
         if (phone !== undefined) updateData.phone = phone;

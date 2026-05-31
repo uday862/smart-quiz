@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const ResourceFolder = require('../models/ResourceFolder');
 const Exam = require('../models/Exam');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 // Get all folders
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
     try {
         const folders = await ResourceFolder.find().sort({ createdAt: -1 });
         res.json(folders);
@@ -14,7 +15,7 @@ router.get('/', async (req, res) => {
 });
 
 // Create folder
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
     try {
         const folder = new ResourceFolder(req.body);
         await folder.save();
@@ -25,7 +26,7 @@ router.post('/', async (req, res) => {
 });
 
 // Delete folder
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
     try {
         await ResourceFolder.findByIdAndDelete(req.params.id);
         // Delete all resources inside this folder

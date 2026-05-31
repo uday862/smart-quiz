@@ -162,7 +162,7 @@ const AdminDashboard = () => {
   /* ══════════ Data Fetch ══════════ */
   const fetchStudents = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/students`);
+      const res = await fetch(`${API_BASE_URL}/api/students?admin=true`);
       const data = await res.json();
       setStudents(Array.isArray(data) ? data : []);
     } catch (err) { console.error(err); }
@@ -170,7 +170,7 @@ const AdminDashboard = () => {
 
   const fetchDays = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/days`);
+      const res = await fetch(`${API_BASE_URL}/api/days?admin=true`);
       const data = await res.json();
       const uniqueMap = new Map();
       data.forEach(d => {
@@ -244,7 +244,7 @@ const AdminDashboard = () => {
 
   const fetchResources = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/exams/resource-hub/all`);
+      const res = await fetch(`${API_BASE_URL}/api/exams/resource-hub/all?admin=true`);
       const data = await res.json();
       setResources(Array.isArray(data) ? data : []);
     } catch (err) { console.error(err); }

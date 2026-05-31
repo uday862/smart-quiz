@@ -1,15 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const Announcement = require('../models/Announcement');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
     try {
         const a = await Announcement.findOne({ active: true }).sort({_id: -1});
         res.json(a || { message: '' });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
     try {
         await Announcement.updateMany({}, { active: false });
         if (req.body.message) {

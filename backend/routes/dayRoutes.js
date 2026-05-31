@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Day = require('../models/Day');
 const Exam = require('../models/Exam');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 // Create a new day
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
     try {
         const day = new Day(req.body);
         await day.save();
@@ -16,17 +17,28 @@ router.post('/', async (req, res) => {
 });
 
 // Get all days with their associated tasks
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
     try {
-        const days = await Day.find().sort({ dayNumber: 1 });
-        const ex = await Exam.find({ isDeleted: { $ne: true } });
+        const days = await Day.find().sort({ dayNumber: 1 }).lean();
+        const ex = await Exam.find({ isDeleted: { $ne: true } }).lean();
         
         console.log(`Mapping ${ex.length} active exams into ${days.length} days`);
         
         const mappedDays = days.map(day => {
+            const tasks = ex.filter(e => String(e.dayId) === String(day._id));
+            if (req.user.role !== 'admin') {
+                tasks.forEach(t => {
+                    (t.questions || []).forEach(q => {
+                        delete q.correct_answer;
+                        if (q.test_cases && q.test_cases.length > 1) {
+                            q.test_cases = [q.test_cases[0]];
+                        }
+                    });
+                });
+            }
             return {
-                ...day._doc,
-                tasks: ex.filter(e => String(e.dayId) === String(day._id))
+                ...day,
+                tasks
             };
         });
         
@@ -37,7 +49,7 @@ router.get('/', async (req, res) => {
 });
 
 // Restart a full day
-router.put('/:id/restart', async (req, res) => {
+router.put('/:id/restart', requireAdmin, async (req, res) => {
     try {
         // Restart all tasks under this day
         await Exam.updateMany(
@@ -51,7 +63,7 @@ router.put('/:id/restart', async (req, res) => {
 });
 
 // Update a day (edit module)
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
     try {
         const day = await Day.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
         if (!day) return res.status(404).json({ message: 'Day not found' });
@@ -62,7 +74,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete a day (and all its tasks)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
     try {
         await Day.findByIdAndDelete(req.params.id);
         await Exam.deleteMany({ dayId: req.params.id });

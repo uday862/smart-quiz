@@ -2,11 +2,18 @@ const express = require('express');
 const router = express.Router();
 const Group = require('../models/Group');
 const User = require('../models/User');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 
-// Get all groups (with populated members)
-router.get('/', async (req, res) => {
+// Get all groups
+router.get('/', requireAuth, async (req, res) => {
     try {
-        const groups = await Group.find().populate('members', '-password').sort({ name: 1 });
+        let groups;
+        if (req.user.role === 'admin') {
+            groups = await Group.find().populate('members', '-password').sort({ name: 1 });
+        } else {
+            // For students, only return group basic info and member IDs to prevent personal data leakage
+            groups = await Group.find().populate('members', '_id').sort({ name: 1 });
+        }
         res.json(groups);
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -14,7 +21,7 @@ router.get('/', async (req, res) => {
 });
 
 // Create a group
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
     try {
         const { name, description, color, members } = req.body;
         const group = new Group({ name, description, color: color || '#3b82f6', members: members || [] });
@@ -31,7 +38,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update group (name, description, members)
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
     try {
         const { name, description, color, members } = req.body;
         const group = await Group.findByIdAndUpdate(
@@ -47,7 +54,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Add student to group
-router.post('/:id/add-member', async (req, res) => {
+router.post('/:id/add-member', requireAdmin, async (req, res) => {
     try {
         const { studentId } = req.body;
         const group = await Group.findByIdAndUpdate(
@@ -62,7 +69,7 @@ router.post('/:id/add-member', async (req, res) => {
 });
 
 // Remove student from group
-router.post('/:id/remove-member', async (req, res) => {
+router.post('/:id/remove-member', requireAdmin, async (req, res) => {
     try {
         const { studentId } = req.body;
         const group = await Group.findByIdAndUpdate(
@@ -77,7 +84,7 @@ router.post('/:id/remove-member', async (req, res) => {
 });
 
 // Delete group
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
     try {
         await Group.findByIdAndDelete(req.params.id);
         res.json({ message: 'Group deleted' });

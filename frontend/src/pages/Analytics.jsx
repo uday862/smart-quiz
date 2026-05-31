@@ -17,7 +17,7 @@ const Analytics = () => {
       try {
         const [statsRes, studentsRes, attRes] = await Promise.all([
           fetch(`${API_BASE_URL}/api/attempts/stats`),
-          fetch(`${API_BASE_URL}/api/students`),
+          fetch(`${API_BASE_URL}/api/students?admin=true`),
           fetch(`${API_BASE_URL}/api/attempts/summary/detailed`)
         ]);
         setStats(await statsRes.json());
@@ -74,7 +74,7 @@ const Analytics = () => {
       try {
         const [attRes, dayRes, grpRes] = await Promise.all([
           fetch(`${API_BASE_URL}/api/attempts/student/${selectedStudentId}`),
-          fetch(`${API_BASE_URL}/api/days`),
+          fetch(`${API_BASE_URL}/api/days?admin=true`),
           fetch(`${API_BASE_URL}/api/groups`)
         ]);
         const attempts = await attRes.json();

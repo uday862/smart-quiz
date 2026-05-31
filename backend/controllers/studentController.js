@@ -50,7 +50,17 @@ exports.getStudents = async (req, res) => {
         if (req.query.course) filter.course = req.query.course;
         if (req.query.status) filter.status = req.query.status;
 
-        const students = await User.find(filter).select('-password').sort({ createdAt: -1 });
+        let students = await User.find(filter).select('-password').sort({ createdAt: -1 }).lean();
+        
+        if (!req.user || req.user.role !== 'admin') {
+            students = students.map(s => ({
+                _id: s._id,
+                name: s.name,
+                roll_no: s.roll_no,
+                avatar_color: s.avatar_color
+            }));
+        }
+
         res.json(students);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });

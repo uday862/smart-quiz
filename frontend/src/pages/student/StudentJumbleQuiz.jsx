@@ -8,7 +8,7 @@ const socket = io(`${API_BASE_URL}`);
 
 // ─── Keyword Jumble Question ──────────────────────────────────────────────────
 const KeywordJumble = ({ question, qIndex, onAnswer, submitted }) => {
-  const correctOrder = (() => { try { return JSON.parse(question.correct_answer); } catch { return []; } })();
+  const correctOrder = (() => { try { return question.correct_answer ? JSON.parse(question.correct_answer) : []; } catch { return []; } })();
   const [pool, setPool] = useState([...question.words]);
   const [slots, setSlots] = useState(new Array(question.words.length).fill(null));
 
@@ -276,37 +276,34 @@ const StudentJumbleQuiz = () => {
   const handleSubmit = async () => {
     if (!exam || submitted) return;
     const currentAnswers = answersRef.current;
-    let cal = 0;
-    exam.questions.forEach((q, idx) => {
-      if (q.type === 'Jumble') {
-        try {
-          const correct = JSON.parse(q.correct_answer);
-          const student = currentAnswers[idx] || q.words;
-          if (JSON.stringify(student.filter(Boolean)) === JSON.stringify(correct)) cal += (q.marks || 1);
-        } catch {}
-      } else if (q.type === 'MCQ') {
-        if (currentAnswers[idx] === q.correct_answer) cal += (q.marks || 1);
-      }
-    });
-    setScore(cal);
+    
+    // Set a placeholder score; backend will evaluate
+    setScore(0);
     setSubmitted(true);
     clearInterval(timerRef.current);
 
     try {
       const currentAttemptId = activeAttemptIdRef.current;
+      let finalScore = 0;
       if (currentAttemptId) {
-        await fetch(`${API_BASE_URL}/api/attempts/${currentAttemptId}/submit`, {
+        const res = await fetch(`${API_BASE_URL}/api/attempts/${currentAttemptId}/submit`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            score: cal, flags: flagsRef.current, status: 'completed',
+            score: 0, flags: flagsRef.current, status: 'completed',
             answers: exam.questions.map((q, idx) => ({
               question_id: q._id,
               answer: q.type === 'Jumble' ? JSON.stringify(currentAnswers[idx] || q.words) : (currentAnswers[idx] || '')
             }))
           })
         });
+        const updatedAttempt = await res.json();
+        finalScore = updatedAttempt.score || 0;
+        setScore(finalScore);
+        if (updatedAttempt.exam) {
+            setExam(updatedAttempt.exam); // Updates exam with correct answers from backend
+        }
       }
-      socket.emit('student_update', { id: user?.id, status: 'completed', marks: cal });
+      socket.emit('student_update', { id: user?.id, status: 'completed', marks: finalScore });
       setTimeout(() => navigate(`/student/summary/${exam._id}`), 5000);
     } catch (err) { console.error('Submit failed', err); }
   };

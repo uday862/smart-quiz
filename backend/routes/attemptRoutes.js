@@ -1,13 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const Attempt = require('../models/Attempt');
-
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 // Save query draft (no score, no complete)
-router.post('/:id/save-query', async (req, res) => {
+router.post('/:id/save-query', requireAuth, async (req, res) => {
     try {
         const { query } = req.body;
         const attempt = await Attempt.findById(req.params.id);
+        if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
+
+        if (req.user.role !== 'admin' && String(attempt.student) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
         
         if (attempt.answers && attempt.answers.length > 0) {
             attempt.answers[0].answer = query;
@@ -23,25 +28,59 @@ router.post('/:id/save-query', async (req, res) => {
 });
 
 // Get generic attempt by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
     try {
-        const attempt = await Attempt.findById(req.params.id).populate('exam');
+        const attempt = await Attempt.findById(req.params.id).populate('exam').lean();
+        if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
+
+        if (req.user.role !== 'admin' && String(attempt.student) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        // If the user is a student, and the attempt is NOT completed, strip correct answers!
+        if (req.user.role !== 'admin' && attempt.status !== 'completed') {
+            if (attempt.exam && attempt.exam.questions) {
+                attempt.exam.questions.forEach(q => {
+                    delete q.correct_answer;
+                    if (q.test_cases && q.test_cases.length > 1) {
+                        q.test_cases = [q.test_cases[0]];
+                    }
+                });
+            }
+        }
         res.json(attempt);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
     }
 });
 
-// Get active attempts for live monitoring
-router.get('/task/:taskId', async (req, res) => {
+// Get active attempts for live monitoring (admin) / leaderboard (student)
+router.get('/task/:taskId', requireAuth, async (req, res) => {
     try {
-        const attempts = await Attempt.find({ exam: req.params.taskId }).populate('student');
+        const attempts = await Attempt.find({ exam: req.params.taskId }).populate('student', 'name roll_no avatar_color').lean();
         // Ensure ipAddress populated
         attempts.forEach(att => {
           if (!att.ipAddress) {
             att.ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
           }
         });
+
+        if (req.user.role !== 'admin') {
+            // For students: strip sensitive data and only return completed attempts for the leaderboard
+            const leaderboardAttempts = attempts
+                .filter(att => att.status === 'completed')
+                .map(att => ({
+                    _id: att._id,
+                    student: att.student,
+                    score: att.score,
+                    status: att.status,
+                    start_time: att.start_time,
+                    createdAt: att.createdAt,
+                    updatedAt: att.updatedAt
+                }));
+            return res.json(leaderboardAttempts);
+        }
+
         res.json(attempts);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
@@ -49,9 +88,14 @@ router.get('/task/:taskId', async (req, res) => {
 });
 
 // Start an attempt immediately (Resume if exists)
-router.post('/start', async (req, res) => {
+router.post('/start', requireAuth, async (req, res) => {
     try {
         const { student, exam } = req.body;
+
+        if (req.user.role !== 'admin' && String(student) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied: Cannot start attempt for another student' });
+        }
+
         // Check for active attempt first to prevent duplicates
         const existing = await Attempt.findOne({ student, exam, status: 'attempting' });
         if (existing) {
@@ -72,12 +116,49 @@ router.post('/start', async (req, res) => {
 });
 
 // Submit/Update an attempt
-router.put('/:id/submit', async (req, res) => {
+router.put('/:id/submit', requireAuth, async (req, res) => {
     try {
         const { score: clientScore, status, answers, flags } = req.body;
         const attempt = await Attempt.findById(req.params.id).populate('exam', 'title questions');
         
-        let finalScore = clientScore;
+        if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
+
+        if (req.user.role !== 'admin' && String(attempt.student) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        if (attempt.status === 'completed') {
+            return res.status(400).json({ message: 'Attempt is already completed and cannot be modified.' });
+        }
+        
+        let serverScore = 0;
+        
+        if (attempt.exam?.questions) {
+            attempt.exam.questions.forEach((q, idx) => {
+                if (q.type === 'MCQ') {
+                    const studentAns = answers.find(a => String(a.question_id) === String(q._id))?.answer;
+                    if (studentAns === q.correct_answer) {
+                        serverScore += (q.marks || 1);
+                    }
+                } else if (q.type === 'Jumble') {
+                    try {
+                        const studentAnsRaw = answers.find(a => String(a.question_id) === String(q._id))?.answer;
+                        let student = [];
+                        if (studentAnsRaw) {
+                             student = typeof studentAnsRaw === 'string' ? JSON.parse(studentAnsRaw) : studentAnsRaw;
+                        }
+                        const correct = JSON.parse(q.correct_answer);
+                        if (Array.isArray(student) && Array.isArray(correct) && JSON.stringify(student.filter(Boolean)) === JSON.stringify(correct)) {
+                            serverScore += (q.marks || 1);
+                        }
+                    } catch (e) {
+                        console.error('Jumble eval err', e.message);
+                    }
+                }
+            });
+        }
+        
+        let finalScore = serverScore;
         
         // Server-side SQL validation for SQL questions (FIXED ASYNC)
         if (attempt.exam?.questions?.[0]?.type === 'SQL' && answers?.[0]?.answer) {
@@ -145,7 +226,11 @@ router.put('/:id/submit', async (req, res) => {
                 console.error('SQL validation error:', sqlErr);
                 finalScore = 0;
             } finally {
-                if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+                try {
+                    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+                } catch (unlinkErr) {
+                    console.error('Failed to delete temp db:', unlinkErr.message);
+                }
             }
         }
         
@@ -181,8 +266,12 @@ router.put('/:id/submit', async (req, res) => {
 });
 
 // Get attempting status logic
-router.get('/exam/:examId/student/:studentId', async (req, res) => {
+router.get('/exam/:examId/student/:studentId', requireAuth, async (req, res) => {
     try {
+        if (req.user.role !== 'admin' && String(req.params.studentId) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
         const attempts = await Attempt.find({ exam: req.params.examId, student: req.params.studentId });
         res.json(attempts);
     } catch (err) {
@@ -191,12 +280,30 @@ router.get('/exam/:examId/student/:studentId', async (req, res) => {
 });
 
 // Get all past attempts for a single student (Reports)
-router.get('/student/:studentId', async (req, res) => {
+router.get('/student/:studentId', requireAuth, async (req, res) => {
     try {
+        if (req.user.role !== 'admin' && String(req.params.studentId) !== String(req.user.id)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
         const attempts = await Attempt.find({ student: req.params.studentId })
             .populate('exam', 'title questions time_limit')
             .populate('dayId', 'dayNumber title')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
+
+        if (req.user.role !== 'admin') {
+            attempts.forEach(att => {
+                if (att.exam && att.exam.questions) {
+                    att.exam.questions.forEach(q => {
+                        delete q.correct_answer;
+                        if (q.test_cases && q.test_cases.length > 1) {
+                            q.test_cases = [q.test_cases[0]];
+                        }
+                    });
+                }
+            });
+        }
         res.json(attempts);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
@@ -204,7 +311,7 @@ router.get('/student/:studentId', async (req, res) => {
 });
 
 // Get Global Stats for Admin
-router.get('/stats', async (req, res) => {
+router.get('/stats', requireAdmin, async (req, res) => {
     try {
         const attempts = await Attempt.find();
         const totalAttempts = attempts.length;
@@ -219,7 +326,7 @@ router.get('/stats', async (req, res) => {
 });
 
 // Detailed summary for all students and all tasks
-router.get('/summary/detailed', async (req, res) => {
+router.get('/summary/detailed', requireAdmin, async (req, res) => {
     try {
         const attempts = await Attempt.find({ status: 'completed' })
             .populate('student', 'roll_no name section')

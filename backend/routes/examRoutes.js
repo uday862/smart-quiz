@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Exam = require('../models/Exam');
 const Group = require('../models/Group');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 // Admin create exam
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
     try {
         const exam = new Exam(req.body);
         await exam.save();
@@ -15,18 +16,18 @@ router.post('/', async (req, res) => {
 });
 
 // Student get active exams (filtered by allowedUsers / allowedGroups)
-// Pass ?studentId=<id> to filter by access
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
     try {
         const exams = await Exam.find({
             status: { $in: ['running', 'not_started'] },
             isDeleted: { $ne: true }
-        });
+        }).lean();
 
-        const studentId = req.query.studentId;
-        if (!studentId) {
+        if (req.user.role === 'admin') {
             return res.json(exams);
         }
+
+        const studentId = req.user.id;
 
         // Find all groups this student belongs to
         const studentGroups = await Group.find({ members: studentId });
@@ -47,6 +48,15 @@ router.get('/', async (req, res) => {
             return false;
         });
 
+        accessible.forEach(exam => {
+            (exam.questions || []).forEach(q => {
+                delete q.correct_answer;
+                if (q.test_cases && q.test_cases.length > 1) {
+                    q.test_cases = [q.test_cases[0]];
+                }
+            });
+        });
+
         res.json(accessible);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
@@ -54,9 +64,19 @@ router.get('/', async (req, res) => {
 });
 
 // Get Resource Hub tasks
-router.get('/resource-hub/all', async (req, res) => {
+router.get('/resource-hub/all', requireAuth, async (req, res) => {
     try {
-        const resources = await Exam.find({ isResource: true, isDeleted: { $ne: true } });
+        const resources = await Exam.find({ isResource: true, isDeleted: { $ne: true } }).lean();
+        if (req.user.role !== 'admin') {
+            resources.forEach(exam => {
+                (exam.questions || []).forEach(q => {
+                    delete q.correct_answer;
+                    if (q.test_cases && q.test_cases.length > 1) {
+                        q.test_cases = [q.test_cases[0]];
+                    }
+                });
+            });
+        }
         res.json(resources);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
@@ -64,10 +84,39 @@ router.get('/resource-hub/all', async (req, res) => {
 });
 
 // Get single exam by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
     try {
-        const exam = await Exam.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+        const exam = await Exam.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).lean();
         if (!exam) return res.status(404).json({ message: 'Exam not found' });
+        
+        if (req.user.role !== 'admin') {
+            const studentId = req.user.id;
+            const studentGroups = await Group.find({ members: studentId });
+            const groupIds = studentGroups.map(g => String(g._id));
+
+            const hasUserRestriction = (exam.allowedUsers || []).length > 0;
+            const hasGroupRestriction = (exam.allowedGroups || []).length > 0;
+
+            let allowed = false;
+            if (!hasUserRestriction && !hasGroupRestriction) {
+                allowed = true;
+            } else if (hasUserRestriction && (exam.allowedUsers || []).some(u => String(u) === String(studentId))) {
+                allowed = true;
+            } else if (hasGroupRestriction && (exam.allowedGroups || []).some(g => groupIds.includes(String(g)))) {
+                allowed = true;
+            }
+
+            if (!allowed) {
+                return res.status(403).json({ message: 'Access denied: You are not assigned to this task' });
+            }
+
+            (exam.questions || []).forEach(q => {
+                delete q.correct_answer;
+                if (q.test_cases && q.test_cases.length > 1) {
+                    q.test_cases = [q.test_cases[0]];
+                }
+            });
+        }
         res.json(exam);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
@@ -75,7 +124,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Start exam — notify only assigned students
-router.post('/:id/start', async (req, res) => {
+router.post('/:id/start', requireAdmin, async (req, res) => {
     try {
         const updated = await Exam.findByIdAndUpdate(req.params.id, { status: 'running' }, { new: true });
         
@@ -118,7 +167,7 @@ router.post('/:id/start', async (req, res) => {
 });
 
 // Stop exam
-router.post('/:id/stop', async (req, res) => {
+router.post('/:id/stop', requireAdmin, async (req, res) => {
     try {
         const updated = await Exam.findByIdAndUpdate(req.params.id, { status: 'stopped' }, { new: true });
         const Attempt = require('../models/Attempt');
@@ -129,7 +178,7 @@ router.post('/:id/stop', async (req, res) => {
 });
 
 // Update exam
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
     try {
         const updatedExam = await Exam.findByIdAndUpdate(req.params.id, req.body, { new: true });
         res.json(updatedExam);
@@ -139,7 +188,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Clone/Reuse task
-router.post('/:id/clone', async (req, res) => {
+router.post('/:id/clone', requireAdmin, async (req, res) => {
     try {
         const original = await Exam.findById(req.params.id);
         if (!original) return res.status(404).json({ message: 'Task not found' });
@@ -169,7 +218,7 @@ router.post('/:id/clone', async (req, res) => {
 });
 
 // Copy task to resource hub manually (leaves original in day)
-router.post('/:id/move-to-resource', async (req, res) => {
+router.post('/:id/move-to-resource', requireAdmin, async (req, res) => {
     try {
         const original = await Exam.findById(req.params.id);
         if (!original) return res.status(404).json({ message: 'Task not found' });
@@ -195,7 +244,7 @@ router.post('/:id/move-to-resource', async (req, res) => {
 });
 
 // Physical delete
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
     try {
         await Exam.findByIdAndDelete(req.params.id);
         const Attempt = require('../models/Attempt');
