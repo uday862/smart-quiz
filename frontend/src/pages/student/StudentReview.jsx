@@ -36,8 +36,44 @@ const StudentReview = () => {
     return ans ? ans.answer : null;
   };
 
+  const isQuestionUnattempted = (q) => {
+    const ans = getUserAnswer(q._id);
+    if (ans === undefined || ans === null) return true;
+    if (q.type === 'Jumble') {
+      try {
+        const parsed = typeof ans === 'string' ? JSON.parse(ans) : ans;
+        return !(Array.isArray(parsed) && parsed.some(Boolean));
+      } catch (e) {
+        return true;
+      }
+    }
+    return String(ans).trim() === '';
+  };
+
+  const getAttemptedStats = () => {
+    const total = exam.questions.length;
+    const unattempted = exam.questions.filter(isQuestionUnattempted).length;
+    const attempted = total - unattempted;
+    return { attempted, unattempted };
+  };
+
+  const { attempted, unattempted } = getAttemptedStats();
+
   const getPercentage = () => {
-    return ((attempt.score / exam.questions.length) * 100).toFixed(2);
+    const totalQuestions = exam.questions.length || 1;
+    return ((attempt.score / totalQuestions) * 100).toFixed(2);
+  };
+
+  const formatTimeTaken = () => {
+    const start = attempt.start_time;
+    const end = attempt.end_time || attempt.updatedAt;
+    if (!start) return 'N/A';
+    const diffMs = new Date(end) - new Date(start);
+    const totalSecs = Math.floor(diffMs / 1000);
+    if (totalSecs <= 0) return '0 secs';
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins} mins ${secs} secs`;
   };
 
   const handleDownloadDocument = () => {
@@ -83,7 +119,9 @@ const StudentReview = () => {
                 <tr style={{ background: '#f8fafc' }}><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', width: '200px', textAlign: 'right' }}>Started on</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a' }}>{new Date(attempt.start_time).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' })}</td></tr>
                 <tr><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>State</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a' }}>{attempt.status || 'Finished'}</td></tr>
                 <tr style={{ background: '#f8fafc' }}><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Completed on</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a' }}>{new Date(attempt.updatedAt).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' })}</td></tr>
-                <tr><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Time taken</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a' }}>5 mins 26 secs</td></tr>
+                <tr><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Time taken</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a' }}>{formatTimeTaken()}</td></tr>
+                <tr style={{ background: '#f8fafc' }}><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Attempted Questions</td><td style={{ padding: '0.75rem 1.5rem', color: '#16a34a', fontWeight: 'bold' }}>{attempted}</td></tr>
+                <tr><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Unattempted Questions</td><td style={{ padding: '0.75rem 1.5rem', color: '#dc2626', fontWeight: 'bold' }}>{unattempted}</td></tr>
                 <tr style={{ background: '#f8fafc' }}><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Marks</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a' }}>{attempt.score}.00/{exam.questions.length}.00</td></tr>
                 <tr><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Grade</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a', fontWeight: 'bold' }}>{getPercentage()} out of 100.00</td></tr>
               </tbody>
@@ -92,14 +130,23 @@ const StudentReview = () => {
 
           {exam.questions.map((q, idx) => {
             const userAnswer = getUserAnswer(q._id);
-            const isCorrect = userAnswer === q.correct_answer;
+            const isUnattempted = isQuestionUnattempted(q);
+            const isCorrect = !isUnattempted && (
+              q.type === 'Jumble' ? (() => {
+                try {
+                  const student = typeof userAnswer === 'string' ? JSON.parse(userAnswer) : userAnswer;
+                  const correct = JSON.parse(q.correct_answer);
+                  return Array.isArray(student) && Array.isArray(correct) && JSON.stringify(student.filter(Boolean)) === JSON.stringify(correct);
+                } catch(e) { return false; }
+              })() : userAnswer === q.correct_answer
+            );
             return (
               <div key={idx} className="print-break" style={{ display: 'flex', gap: '1.5rem', marginBottom: '2.5rem' }}>
                 {/* Visual Marker Box */}
                 <div className="print-box" style={{ width: '120px', background: 'var(--surface-color)', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '1rem', flexShrink: 0, alignSelf: 'flex-start' }}>
                   <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '0.5rem', fontSize: '1rem' }}>Question <span style={{ fontSize: '1.25rem' }}>{idx + 1}</span></div>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '1rem' }}>
-                    {isCorrect ? 'Correct' : 'Incorrect'}<br/>
+                    {isUnattempted ? 'Unattempted' : (isCorrect ? 'Correct' : 'Incorrect')}<br/>
                     Mark {isCorrect ? '1.00' : '0.00'} out of 1.00
                   </div>
                   <div className="no-print" style={{ fontSize: '0.75rem', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -162,14 +209,23 @@ const StudentReview = () => {
           <div style={{ padding: '1.5rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem', marginBottom: '1.5rem' }}>
                {exam.questions.map((q, idx) => {
-                const isCorrect = getUserAnswer(q._id) === q.correct_answer;
+                const isUnattempted = isQuestionUnattempted(q);
+                const isCorrect = !isUnattempted && (
+                  q.type === 'Jumble' ? (() => {
+                    try {
+                      const student = typeof getUserAnswer(q._id) === 'string' ? JSON.parse(getUserAnswer(q._id)) : getUserAnswer(q._id);
+                      const correct = JSON.parse(q.correct_answer);
+                      return Array.isArray(student) && Array.isArray(correct) && JSON.stringify(student.filter(Boolean)) === JSON.stringify(correct);
+                    } catch(e) { return false; }
+                  })() : getUserAnswer(q._id) === q.correct_answer
+                );
                 return (
                     <div key={idx} style={{ 
                     height: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', 
                     border: '1px solid #94a3b8', background: 'var(--surface-color)', position: 'relative', borderRadius: '2px'
                     }}>
                     <div style={{ fontSize: '0.875rem', fontWeight: 'bold', flex: 1, display: 'flex', alignItems: 'center' }}>{idx + 1}</div>
-                    <div style={{ width: '100%', height: '12px', background: isCorrect ? '#16a34a' : '#dc2626', opacity: 0.8 }}></div>
+                    <div style={{ width: '100%', height: '12px', background: isUnattempted ? '#94a3b8' : (isCorrect ? '#16a34a' : '#dc2626'), opacity: 0.8 }}></div>
                     </div>
                 );
                })}

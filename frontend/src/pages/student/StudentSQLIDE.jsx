@@ -1,8 +1,66 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import API_BASE_URL from '../../config';
-import { Play, Check, X, Server, Database, Save } from 'lucide-react';
+import { Play, Check, X, Server, Database, Save, Clock } from 'lucide-react';
 import alasql from 'alasql';
+
+// ─── Network Indicator ────────────────────────────────────────────────────────
+const NetworkIndicator = ({ isOnline }) => {
+  const [netSpeed, setNetSpeed] = useState('High');
+
+  useEffect(() => {
+    const updateConnection = () => {
+      if (!navigator.onLine) {
+        setNetSpeed('Offline');
+        return;
+      }
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (conn) {
+        const type = conn.effectiveType; // 'slow-2g', '2g', '3g', '4g'
+        if (type === '4g') setNetSpeed('High');
+        else if (type === '3g') setNetSpeed('Medium');
+        else setNetSpeed('Low');
+      } else {
+        setNetSpeed('High');
+      }
+    };
+
+    updateConnection();
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+      conn.addEventListener('change', updateConnection);
+    }
+    window.addEventListener('online', updateConnection);
+    window.addEventListener('offline', updateConnection);
+
+    return () => {
+      if (conn) conn.removeEventListener('change', updateConnection);
+      window.removeEventListener('online', updateConnection);
+      window.removeEventListener('offline', updateConnection);
+    };
+  }, []);
+
+  const getStatusColor = () => {
+    if (!isOnline || netSpeed === 'Offline') return '#ef4444';
+    if (netSpeed === 'High') return '#22c55e';
+    if (netSpeed === 'Medium') return '#eab308';
+    return '#f97316';
+  };
+
+  const getStatusIcon = () => {
+    if (!isOnline || netSpeed === 'Offline') return '❌';
+    if (netSpeed === 'High') return '📶 High';
+    if (netSpeed === 'Medium') return '📶 Medium';
+    return '⚠️ Low';
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold', color: getStatusColor() }}>
+      <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: getStatusColor() }} />
+      Network: {getStatusIcon()}
+    </div>
+  );
+};
 
 const StudentSQLIDE = () => {
     const { id } = useParams();
@@ -15,8 +73,41 @@ const StudentSQLIDE = () => {
     const [isPassed, setIsPassed] = useState(false);
     const [loading, setLoading] = useState(true);
     const [latestScore, setLatestScore] = useState(null);
+    const [timeLeft, setTimeLeft] = useState(null);
+    const [activeAttemptId, setActiveAttemptId] = useState(null);
+    const [submitted, setSubmitted] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [isFullscreenEnforced, setIsFullscreenEnforced] = useState(true);
+    const [flags, setFlags] = useState(0);
+    const flagsRef = useRef(0);
+    const isUnloadingRef = useRef(false);
+
+    useEffect(() => {
+        flagsRef.current = flags;
+    }, [flags]);
+
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            isUnloadingRef.current = true;
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (exam && exam.title) {
+            document.title = exam.title;
+        }
+        return () => {
+            document.title = 'Smart Quiz';
+        };
+    }, [exam]);
 
     const [dbId] = useState(`db_${Date.now()}`); // Unique DB per instance
+    const timerRef = useRef(null);
 
     useEffect(() => {
         const fetchExam = async () => {
@@ -32,24 +123,65 @@ const StudentSQLIDE = () => {
                     return;
                 }
                 
+                if (found.status !== 'running') {
+                    alert('This task is currently not active.');
+                    navigate(`/student/summary/${found._id}`);
+                    return;
+                }
+                
                 setExam(found);
+                window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: found.fullWindow } }));
 
-                // Fetch past attempts
+                // Fetch/Start Attempt immediately
+                let startData;
+                try {
+                    const startRes = await fetch(`${API_BASE_URL}/api/attempts/start`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ student: user.id, exam: found._id, dayId: found.dayId })
+                    });
+                    if (startRes.ok) {
+                        startData = await startRes.json();
+                        setActiveAttemptId(startData._id);
+                        if (startData.answers && startData.answers.length > 0) {
+                            setQuery(startData.answers[0].answer || 'SELECT * FROM test;');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Start attempt failed', e);
+                }
+
+                // Check past attempts for limit and scores
                 try {
                     const attemptRes = await fetch(`${API_BASE_URL}/api/attempts/exam/${found._id}/student/${user.id}`);
                     if (attemptRes.ok) {
                         const pastAttempts = await attemptRes.json();
+                        const completedAttempts = pastAttempts.filter(a => a.status === 'completed');
+                        if (completedAttempts.length >= (found.attempt_limit || 1)) {
+                            navigate(`/student/summary/${found._id}`);
+                            return;
+                        }
                         if (pastAttempts.length > 0) {
                             pastAttempts.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
                             setLatestScore(pastAttempts[0].score || 0);
-                            
-                            if (pastAttempts[0].answers && pastAttempts[0].answers.length > 0) {
-                                setQuery(pastAttempts[0].answers[0].answer || 'SELECT * FROM test;');
-                            }
                         }
                     }
                 } catch (e) {
                     console.error('Failed to fetch past attempts', e);
+                }
+
+                // Set remaining time
+                const savedTime = localStorage.getItem(`timeLeft_${found._id}`);
+                if (savedTime) {
+                    setTimeLeft(parseInt(savedTime, 10));
+                } else if (startData) {
+                    const startTime = new Date(startData.start_time || startData.createdAt).getTime();
+                    const timeLimitMs = (found.time_limit || 30) * 60 * 1000;
+                    const elapsedMs = Date.now() - startTime;
+                    const remainingSeconds = Math.max(0, Math.floor((timeLimitMs - elapsedMs) / 1000));
+                    setTimeLeft(remainingSeconds);
+                } else {
+                    setTimeLeft((found.time_limit || 30) * 60);
                 }
                 
                 // Initialize ALASQL Database in memory
@@ -71,11 +203,85 @@ const StudentSQLIDE = () => {
             }
         };
         fetchExam();
+
+        const goOnline = () => setIsOnline(true);
+        const goOffline = () => setIsOnline(false);
+        window.addEventListener('online', goOnline);
+        window.addEventListener('offline', goOffline);
         
         return () => {
+            window.removeEventListener('online', goOnline);
+            window.removeEventListener('offline', goOffline);
             try { alasql(`DROP DATABASE IF EXISTS ${dbId}`); } catch(e) {}
+            clearInterval(timerRef.current);
+            window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: false } }));
         };
     }, [id, dbId]);
+
+    useEffect(() => {
+        if (exam && exam.fullWindow && !submitted) {
+            setIsFullscreenEnforced(!!document.fullscreenElement);
+        }
+    }, [exam, submitted]);
+
+    useEffect(() => {
+        if (!exam || !exam.fullWindow || submitted) return;
+
+        const handleFullscreenChange = () => {
+            if (isUnloadingRef.current) return;
+            setIsFullscreenEnforced(!!document.fullscreenElement);
+            if (!document.fullscreenElement) {
+                setFlags(prev => prev + 1);
+            }
+        };
+
+        const handleVisibilityOrBlur = () => {
+            if (isUnloadingRef.current) return;
+            if (document.hidden || document.visibilityState === 'hidden') {
+                setFlags(prev => prev + 1);
+                alert("Warning: Tab switching/leaving the page is not allowed during this exam!");
+            }
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('visibilitychange', handleVisibilityOrBlur);
+        window.addEventListener('blur', handleVisibilityOrBlur);
+
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+            document.removeEventListener('visibilitychange', handleVisibilityOrBlur);
+            window.removeEventListener('blur', handleVisibilityOrBlur);
+        };
+    }, [exam, submitted]);
+
+    useEffect(() => {
+        if (!exam || !exam.fullWindow || submitted) return;
+        const limit = exam.flagLimit !== undefined ? exam.flagLimit : 10;
+        if (flags >= limit) {
+            handleSubmitAttempt({ forceSpam: true });
+        }
+    }, [flags, exam, submitted]);
+
+    useEffect(() => {
+        if (exam && !submitted && timeLeft > 0 && isOnline) {
+            timerRef.current = setInterval(() => {
+                setTimeLeft(prev => Math.max(0, prev - 1));
+            }, 1000);
+            return () => clearInterval(timerRef.current);
+        }
+    }, [exam, submitted, timeLeft, isOnline]);
+
+    useEffect(() => {
+        if (exam && !submitted && timeLeft !== null && timeLeft <= 0) {
+            handleSubmitAttempt();
+        }
+    }, [timeLeft, exam, submitted]);
+
+    useEffect(() => {
+        if (exam && timeLeft > 0 && !submitted) {
+            localStorage.setItem(`timeLeft_${id}`, timeLeft.toString());
+        }
+    }, [timeLeft, exam, id, submitted]);
 
     const [isPublicMode, setIsPublicMode] = useState(false);
 
@@ -141,37 +347,51 @@ const StudentSQLIDE = () => {
         setIsPassed(finalScore);
     };
 
-    const handleSubmitAttempt = async () => {
+    const handleSubmitAttempt = async (options = {}) => {
+        if (!exam || submitted || submitting) return;
+        setSubmitting(true);
         try {
-            // Step 1: Start Attempt
-            const startRes = await fetch(`${API_BASE_URL}/api/attempts/start`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ student: user.id, exam: exam._id })
-            });
-            const attemptData = await startRes.json();
+            let targetAttemptId = activeAttemptId;
+            if (!targetAttemptId) {
+                const startRes = await fetch(`${API_BASE_URL}/api/attempts/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ student: user.id, exam: exam._id })
+                });
+                const attemptData = await startRes.json();
+                targetAttemptId = attemptData._id;
+            }
 
             // Step 2: Submit Completion
-            const res = await fetch(`${API_BASE_URL}/api/attempts/${attemptData._id}/submit`, {
+            const res = await fetch(`${API_BASE_URL}/api/attempts/${targetAttemptId}/submit`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     score: isPassed, 
                     status: 'completed',
                     answers: [{ question_id: exam.questions[0]._id, answer: query }],
-                    flags: 0
+                    flags: flagsRef.current,
+                    spam: !!options?.forceSpam
                 })
             });
 
             if (res.ok) {
                 const finalAttempt = await res.json();
+                localStorage.removeItem(`timeLeft_${exam._id}`);
                 alert(`Successfully saved to database! Server Validated Score: ${finalAttempt.score}/100`);
                 setLatestScore(finalAttempt.score);
+                setSubmitted(true);
+                if (document.fullscreenElement) {
+                    document.exitFullscreen().catch(err => console.error("Exit fullscreen error", err));
+                }
+                navigate('/student');
             } else {
                 alert('An error occurred updating the database submission record.');
             }
         } catch (err) {
             alert(`Fatal Network Error submitting: ${err.message}`);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -182,6 +402,70 @@ const StudentSQLIDE = () => {
 
     return (
         <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+            
+            {!isOnline && (
+              <div style={{
+                position: 'fixed', inset: 0, background: 'rgba(7, 17, 37, 0.96)',
+                zIndex: 13000, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', color: 'white'
+              }}>
+                <div style={{ background: '#1e293b', padding: '2.5rem', borderRadius: '12px', textAlign: 'center', maxWidth: '450px', border: '2px solid #ef4444' }}>
+                  <span style={{ fontSize: '3rem', color: '#ef4444', display: 'block', marginBottom: '1rem' }}>⚠️</span>
+                  <h2 style={{ fontSize: '1.5rem', fontWeight: '950', marginBottom: '1rem' }}>Internet Connection Lost</h2>
+                  <p style={{ color: '#94a3b8', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+                    Your timer has been paused. Please check your network cables or Wi-Fi connection. The exam will resume automatically once connection is restored.
+                  </p>
+                  <div style={{ display: 'inline-block', width: '24px', height: '24px', border: '3px solid #ef4444', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                </div>
+              </div>
+            )}
+
+            {exam && exam.fullWindow && !isFullscreenEnforced && !submitted && (
+              <div style={{
+                position: 'fixed', inset: 0, background: 'rgba(7, 17, 37, 0.98)',
+                zIndex: 11000, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', color: 'white'
+              }}>
+                <div style={{ background: '#1e293b', padding: '2.5rem', borderRadius: '12px', textAlign: 'center', maxWidth: '480px', border: '2px solid #ef4444' }}>
+                  <span style={{ fontSize: '3.5rem', display: 'block', marginBottom: '1rem' }}>🔒</span>
+                  <h2 style={{ fontSize: '1.6rem', fontWeight: '900', marginBottom: '1rem', color: '#f36d44' }}>Fullscreen Mode Required</h2>
+                  <p style={{ color: '#94a3b8', lineHeight: '1.6', marginBottom: '1.75rem' }}>
+                    This exam has been secured by the administrator. To take it, you must remain in fullscreen mode. Switching tabs or exiting fullscreen is recorded.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const el = document.documentElement;
+                      if (el.requestFullscreen) {
+                        el.requestFullscreen().then(() => {
+                          setIsFullscreenEnforced(true);
+                        }).catch(e => console.error("Fullscreen error", e));
+                      }
+                    }}
+                    style={{
+                      background: '#16a34a', color: 'white', padding: '0.85rem 2.5rem',
+                      border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: '900',
+                      cursor: 'pointer', boxShadow: '0 4px 14px rgba(22,163,74,0.4)'
+                    }}
+                  >
+                    Enter Fullscreen & Continue
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {submitting && (
+              <div style={{
+                position: 'fixed', inset: 0, background: 'rgba(7, 17, 37, 0.95)',
+                zIndex: 12000, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', color: 'white'
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ display: 'inline-block', width: '50px', height: '50px', border: '5px solid #7c3aed', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }} />
+                  <h2 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'white', marginBottom: '0.5rem' }}>Grading Your Answers</h2>
+                  <p style={{ color: '#c4b5fd', fontSize: '1rem' }}>Evaluating code and compiling scores, please do not close this window...</p>
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #ddd', paddingBottom: '1rem' }}>
                 <div>
                    <h1 style={{ fontWeight: '900', color: 'var(--text-primary)', margin: 0, fontSize: '2rem' }}>{exam.title}</h1>
@@ -190,6 +474,15 @@ const StudentSQLIDE = () => {
                    </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                    <NetworkIndicator isOnline={isOnline} />
+                   {timeLeft !== null && timeLeft >= 0 && (
+                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: timeLeft < 60 ? '#fee2e2' : '#fef3c7', border: `1px solid ${timeLeft < 60 ? '#fca5a5' : '#fde68a'}`, padding: '0.4rem 0.9rem', borderRadius: '4px' }}>
+                           <Clock size={16} color={timeLeft < 60 ? '#ef4444' : '#d97706'} />
+                           <span style={{ fontWeight: 'bold', color: timeLeft < 60 ? '#ef4444' : '#d97706' }}>
+                               {Math.floor(timeLeft / 60)}:{(timeLeft % 60 < 10 ? '0' : '')}{timeLeft % 60}
+                           </span>
+                       </div>
+                   )}
                   {latestScore !== null && (
                       <div style={{ background: '#f8fafc', padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontWeight: 'bold', color: '#0f172a' }}>
                          Latest Score: <span style={{ color: latestScore >= 50 ? '#16a34a' : '#ef4444' }}>{latestScore} / 100</span>
@@ -255,7 +548,14 @@ const StudentSQLIDE = () => {
                        <div style={{ background: '#1e293b', padding: '0.75rem 1rem', color: 'white', fontWeight: 'bold', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
                           <span>SQL TERMINAL</span>
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
-                              <button onClick={() => handleRunPatternMatch(true)} style={{ background: '#3b82f6', color: 'white', border: 'none', fontSize: '0.7rem', fontWeight: 'bold', padding: '0.3rem 1rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Play size={10}/> RUN CODE (DEBUG)</button>
+                                                             {query && !submitted && (
+                                  <button 
+                                    onClick={() => setQuery('')} 
+                                    style={{ background: '#ef4444', color: 'white', border: 'none', fontSize: '0.7rem', fontWeight: 'bold', padding: '0.3rem 0.75rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem' }}
+                                  >
+                                    CLEAR TERMINAL
+                                  </button>
+                               )}<button onClick={() => handleRunPatternMatch(true)} style={{ background: '#3b82f6', color: 'white', border: 'none', fontSize: '0.7rem', fontWeight: 'bold', padding: '0.3rem 1rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Play size={10}/> RUN CODE (DEBUG)</button>
                               <button onClick={() => handleRunPatternMatch(false)} style={{ background: '#22c55e', color: 'white', border: 'none', fontSize: '0.7rem', fontWeight: 'bold', padding: '0.3rem 1rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Server size={10}/> EVALUATE HIDDEN</button>
                           </div>
                        </div>

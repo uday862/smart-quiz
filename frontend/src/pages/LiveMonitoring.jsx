@@ -28,6 +28,9 @@ const LiveMonitoring = () => {
                marks: att.score || 0,
                ip: att.ipAddress || 'unknown',
                status: att.status,
+               flags: att.flags || 0,
+               spam: att.spam || false,
+               flagLimit: att.exam?.flagLimit || 10,
                updatedAt: att.updatedAt
              });
            }
@@ -49,7 +52,9 @@ const LiveMonitoring = () => {
              ...update, 
              status: update.status || s.status,
              // Ensure marks update correctly
-             marks: update.marks !== undefined ? update.marks : s.marks
+             marks: update.marks !== undefined ? update.marks : s.marks,
+             flags: update.flags !== undefined ? update.flags : s.flags,
+             spam: update.spam !== undefined ? update.spam : s.spam
            } : s);
         }
         return [...prev, { ...update, status: update.status || 'attempting' }];
@@ -79,6 +84,7 @@ const LiveMonitoring = () => {
               <th style={{ padding: '1rem 1.5rem' }}>Student Detail</th>
               <th>Current Status</th>
               <th style={{ textAlign: 'center' }}>Official Score</th>
+              <th style={{ textAlign: 'center' }}>Violations</th>
               <th>IP Audit</th>
               <th>Last Activity</th>
             </tr>
@@ -103,6 +109,17 @@ const LiveMonitoring = () => {
                 <td style={{ textAlign: 'center', fontSize: '1.25rem', fontWeight: '900', color: '#f36d44' }}>
                   {student.status === 'completed' ? student.marks : '—'}
                 </td>
+                <td style={{ textAlign: 'center' }}>
+                  {student.spam ? (
+                    <span style={{ padding: '0.3rem 0.8rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '900', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                      ⚠️ SPAM
+                    </span>
+                  ) : (
+                    <span style={{ fontWeight: '850', color: student.flags > 0 ? '#ef4444' : '#64748b' }}>
+                      {student.flags} / {student.flagLimit || 10}
+                    </span>
+                  )}
+                </td>
                 <td style={{ fontFamily: 'monospace', color: '#94a3b8', fontSize: '0.85rem' }}>{student.ip}</td>
                 <td style={{ color: '#64748b', fontSize: '0.85rem' }}>
                   {new Date(student.updatedAt).toLocaleTimeString()}
@@ -111,7 +128,7 @@ const LiveMonitoring = () => {
             ))}
             {liveData.length === 0 && (
               <tr>
-                <td colSpan="5" style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8' }}>
+                <td colSpan="6" style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8' }}>
                   No active session data found for this task.
                 </td>
               </tr>

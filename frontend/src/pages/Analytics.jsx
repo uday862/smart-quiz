@@ -20,14 +20,19 @@ const Analytics = () => {
           fetch(`${API_BASE_URL}/api/students?admin=true`),
           fetch(`${API_BASE_URL}/api/attempts/summary/detailed`)
         ]);
-        setStats(await statsRes.json());
-        setStudents(await studentsRes.json());
+
+        const statsData = statsRes.ok ? await statsRes.json() : { totalAttempts: 0, totalFlags: 0, topScore: 0, avgScore: 0 };
+        const studentsData = studentsRes.ok ? await studentsRes.json() : [];
+        const allAttempts = attRes.ok ? await attRes.json() : [];
+
+        setStats(statsData);
+        setStudents(Array.isArray(studentsData) ? studentsData : []);
         
-        const allAttempts = await attRes.json();
+        const attemptsArr = Array.isArray(allAttempts) ? allAttempts : [];
         
         // Calculate Marks Data
         const marksCount = { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 };
-        allAttempts.forEach(a => {
+        attemptsArr.forEach(a => {
           const score = a.score || 0;
           let maxMarks = 100;
           if (a.exam?.questions) {
@@ -46,7 +51,7 @@ const Analytics = () => {
         
         // Calculate Attempts Over Time
         const timeCount = {};
-        allAttempts.forEach(a => {
+        attemptsArr.forEach(a => {
            const d = new Date(a.createdAt);
            const hour = d.getHours();
            const timeLabel = `${hour.toString().padStart(2, '0')}:00`;
@@ -77,16 +82,20 @@ const Analytics = () => {
           fetch(`${API_BASE_URL}/api/days?admin=true`),
           fetch(`${API_BASE_URL}/api/groups`)
         ]);
-        const attempts = await attRes.json();
-        const days = await dayRes.json();
-        const groups = await grpRes.json();
+        const attempts = attRes.ok ? await attRes.json() : [];
+        const days = dayRes.ok ? await dayRes.json() : [];
+        const groups = grpRes.ok ? await grpRes.json() : [];
+
+        const attemptsArr = Array.isArray(attempts) ? attempts : [];
+        const daysArr = Array.isArray(days) ? days : [];
+        const groupsArr = Array.isArray(groups) ? groups : [];
 
         // Find groups the student is in
-        const myGroupIds = groups.filter(g => (g.members || []).some(m => (m._id || m) === selectedStudentId)).map(g => g._id);
+        const myGroupIds = groupsArr.filter(g => (g.members || []).some(m => (m._id || m) === selectedStudentId)).map(g => g._id);
 
         // Find all active permitted tasks
         const pTasks = [];
-        days.filter(d => !d.isDeleted).forEach(d => {
+        daysArr.filter(d => !d.isDeleted).forEach(d => {
           (d.tasks || []).filter(t => !t.isDeleted).forEach(t => {
             const hasUserRes = (t.allowedUsers || []).length > 0;
             const hasGrpRes = (t.allowedGroups || []).length > 0;
@@ -98,7 +107,7 @@ const Analytics = () => {
           });
         });
 
-        setStudentDetails({ attempts, permittedTasks: pTasks });
+        setStudentDetails({ attempts: attemptsArr, permittedTasks: pTasks });
       } catch (e) { console.error(e); }
       setLoadingStudent(false);
     };

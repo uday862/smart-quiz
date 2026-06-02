@@ -78,6 +78,7 @@ const AdminDashboard = () => {
 
   /* ─── Search ─── */
   const [studentSearch, setStudentSearch] = useState('');
+  const [selectedReport, setSelectedReport] = useState(null);
 
   /* ─── Module (Day) states ─── */
   const [expandedDays, setExpandedDays] = useState(new Set());
@@ -106,6 +107,8 @@ const AdminDashboard = () => {
   const [tSampleIn, setTSampleIn] = useState('');
   const [tSampleOut, setTSampleOut] = useState('');
   const [tNotes, setTNotes] = useState('');
+  const [tFullWindow, setTFullWindow] = useState(false);
+  const [tFlagLimit, setTFlagLimit] = useState(10);
 
   /* ─── Student / Profile states ─── */
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -322,6 +325,8 @@ const AdminDashboard = () => {
     setTTime(30); setTAttempts(1); setTAllowedUsers([]); setTAllowedGroups([]);
     setTAssignMode('all'); setTaskType('Quiz (Multiple Choice)');
     setTTestCases([{ input: '', output: '' }]); setTSampleIn(''); setTSampleOut('');
+    setTFullWindow(false);
+    setTFlagLimit(10);
     setShowTaskModal(true);
   };
 
@@ -332,6 +337,8 @@ const AdminDashboard = () => {
     setTNotes(task.notes || '');
     setTTime(task.time_limit);
     setTAttempts(task.attempt_limit || 1);
+    setTFullWindow(task.fullWindow || false);
+    setTFlagLimit(task.flagLimit !== undefined ? task.flagLimit : 10);
     const au = task.allowedUsers || [];
     const ag = task.allowedGroups || [];
     setTAllowedUsers(au);
@@ -403,7 +410,7 @@ const AdminDashboard = () => {
       const url = editingTask ? `${API_BASE_URL}/api/exams/${editingTask._id}` : `${API_BASE_URL}/api/exams`;
       const res = await fetch(url, {
         method, headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dayId: tDayId, title: tTitle, notes: tNotes, time_limit: tTime, attempt_limit: tAttempts, questions, allowedUsers, allowedGroups })
+        body: JSON.stringify({ dayId: tDayId, title: tTitle, notes: tNotes, time_limit: tTime, attempt_limit: tAttempts, fullWindow: tFullWindow, flagLimit: tFlagLimit, questions, allowedUsers, allowedGroups })
       });
       if (res.ok) {
         fetchDays(); closeTaskModal();
@@ -494,6 +501,8 @@ const AdminDashboard = () => {
     setTTitle(''); setTNotes(''); setTDesc(''); setTJson(''); setTTime(30); setTAttempts(1);
     setTAllowedUsers([]); setTAllowedGroups([]); setTAssignMode('all');
     setTTestCases([{ input: '', output: '' }]); setTSampleIn(''); setTSampleOut('');
+    setTFullWindow(false);
+    setTFlagLimit(10);
   };
 
   const handleCloneResource = async (e) => {
@@ -664,8 +673,17 @@ const AdminDashboard = () => {
     if (reportViewMode === 'tasks') {
       const data = getFilteredReports();
       if (data.length === 0) return showToast('No data to download', 'error');
-      const headers = ['Student Name', 'Roll No', 'Task Name', 'Score', 'Status', 'Date'];
-      const rows = data.map(r => [r.student?.name, r.student?.roll_no, r.exam?.title, r.score, 'Completed', new Date(r.createdAt).toLocaleDateString()]);
+      const headers = ['Student Name', 'Roll No', 'Task Name', 'Score', 'Status', 'Flags', 'Spam', 'Date'];
+      const rows = data.map(r => [
+        r.student?.name,
+        r.student?.roll_no,
+        r.exam?.title,
+        r.score,
+        'Completed',
+        r.flags || 0,
+        r.spam ? 'Yes' : 'No',
+        new Date(r.createdAt).toLocaleDateString()
+      ]);
       const csv = [headers, ...rows].map(e => e.join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
@@ -1146,13 +1164,19 @@ const AdminDashboard = () => {
                 <thead><tr style={{ background: '#f8fafc' }}><th style={{ padding: '1rem' }}>Student</th><th>Task</th><th>Score</th><th>Date</th></tr></thead>
                 <tbody>
                   {getFilteredReports().map((r, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <tr key={i} onClick={() => setSelectedReport(r)} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
                       <td style={{ padding: '1rem' }}>
-                        <div style={{ fontWeight: '700' }}>{r.student?.name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontWeight: '700' }}>{r.student?.name}</span>
+                          {r.spam && <span style={{ fontSize: '0.65rem', background: '#fee2e2', color: '#ef4444', border: '1px solid #fca5a5', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: '900' }}>⚠️ SPAM</span>}
+                        </div>
                         <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{r.student?.roll_no}</div>
                       </td>
                       <td style={{ fontWeight: 'bold' }}>{r.exam?.title}</td>
-                      <td style={{ fontWeight: '900', color: '#f36d44' }}>{r.score} pts</td>
+                      <td style={{ fontWeight: '900', color: '#f36d44' }}>
+                        <div>{r.score} pts</div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 'normal' }}>Flags: {r.flags || 0}</div>
+                      </td>
                       <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(r.createdAt).toLocaleString()}</td>
                     </tr>
                   ))}
@@ -1556,6 +1580,21 @@ const AdminDashboard = () => {
                     <input type="number" value={tAttempts} onChange={e => setTAttempts(e.target.value)} className="input-field" required />
                   </div>
                 </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <input type="checkbox" id="fullWindow" checked={tFullWindow} onChange={e => setTFullWindow(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                    <label htmlFor="fullWindow" style={{ fontSize: '0.825rem', fontWeight: '800', color: '#475569', cursor: 'pointer' }}>
+                      🔒 Enforce Fullscreen (Full Window Security Mode)
+                    </label>
+                  </div>
+                  {tFullWindow && (
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.4rem' }}>TAB/WINDOW LEAVING LIMIT (MAX WARNINGS BEFORE AUTO-SUBMIT)</label>
+                      <input type="number" min="1" max="100" value={tFlagLimit} onChange={e => setTFlagLimit(Number(e.target.value))} className="input-field" placeholder="e.g. 10" required />
+                    </div>
+                  )}
+                </div>
 
                 {/* ─── ACCESS CONTROL ─── */}
                 <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', flexShrink: 0 }}>
@@ -1838,6 +1877,105 @@ const AdminDashboard = () => {
                 <button type="submit" className="btn btn-primary">Clone Task</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Selected Report Detail Modal ─── */}
+      {selectedReport && (
+        <div className="modal-overlay" style={{ zIndex: 11000 }}>
+          <div className="modal-content" style={{ maxWidth: '800px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: '#071125' }}>Attempt Detail Audit</h2>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                  Submitted on {new Date(selectedReport.createdAt).toLocaleString()} from IP: <code>{selectedReport.ipAddress || 'unknown'}</code>
+                </p>
+              </div>
+              <button className="btn-icon" onClick={() => setSelectedReport(null)}><X size={20} /></button>
+            </div>
+            
+            <div className="modal-body" style={{ overflowY: 'auto', flex: 1, padding: '1.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {/* Summary Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Student</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#0f172a', marginTop: '0.25rem' }}>{selectedReport.student?.name || 'Unknown'}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Roll: {selectedReport.student?.roll_no || 'N/A'}</div>
+                </div>
+                
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Task Name</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#0f172a', marginTop: '0.25rem' }}>{selectedReport.exam?.title || 'N/A'}</div>
+                </div>
+
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Score / Status</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#f36d44', marginTop: '0.25rem' }}>{selectedReport.score} pts</div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Status: {selectedReport.status}</div>
+                </div>
+
+                <div style={{ background: selectedReport.spam ? '#fef2f2' : '#f8fafc', padding: '1rem', borderRadius: '8px', border: `1px solid ${selectedReport.spam ? '#fecaca' : '#e2e8f0'}` }}>
+                  <div style={{ fontSize: '0.75rem', color: selectedReport.spam ? '#ef4444' : '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Proctor Status</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: '900', color: selectedReport.spam ? '#dc2626' : '#0f172a', marginTop: '0.25rem' }}>
+                    {selectedReport.spam ? '⚠️ Flagged SPAM' : '✅ Clear'}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Violations: {selectedReport.flags || 0}</div>
+                </div>
+              </div>
+
+              {/* Answers Breakdown */}
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: '900', color: '#0f172a', marginBottom: '1rem' }}>Submitted Answers</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {selectedReport.exam?.questions?.map((q, idx) => {
+                    const studentAnsObj = (selectedReport.answers || []).find(a => String(a.question_id) === String(q._id));
+                    const studentAns = studentAnsObj?.answer;
+                    
+                    return (
+                      <div key={q._id || idx} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.8rem', background: '#e2e8f0', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 'bold' }}>Q{idx + 1} — {q.type}</span>
+                          {q.marks && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{q.marks} marks</span>}
+                        </div>
+                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#0f172a', whiteSpace: 'pre-wrap' }}>{q.text}</div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>STUDENT ANSWER:</div>
+                          {q.type === 'MCQ' ? (
+                            <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#0f172a' }}>{studentAns || '— (No Option Chosen)'}</div>
+                          ) : (
+                            <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.8rem', overflowX: 'auto', background: '#0f172a', color: '#38bdf8', padding: '0.75rem', borderRadius: '4px' }}>
+                              {studentAns || '— (No Code/Query Submitted)'}
+                            </pre>
+                          )}
+                        </div>
+
+                        {q.correct_answer && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: '#f0fdf4', padding: '0.75rem', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                            <div style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 'bold' }}>CORRECT ANSWER / SCHEMATIC KEY:</div>
+                            {q.type === 'MCQ' ? (
+                              <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#14532d' }}>{q.correct_answer}</div>
+                            ) : (
+                              <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.8rem', overflowX: 'auto', background: '#14532d', color: '#4ade80', padding: '0.75rem', borderRadius: '4px' }}>
+                                {q.correct_answer}
+                              </pre>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {(!selectedReport.exam?.questions || selectedReport.exam.questions.length === 0) && (
+                    <div style={{ color: '#64748b', textAlign: 'center', padding: '2rem' }}>No question metadata available.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            <div className="modal-footer" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-outline" onClick={() => setSelectedReport(null)}>Close</button>
+            </div>
           </div>
         </div>
       )}

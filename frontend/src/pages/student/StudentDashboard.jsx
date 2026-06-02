@@ -338,9 +338,12 @@ const StudentDashboard = ({ tab }) => {
       {attemptTask && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '8px', maxWidth: '600px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', color: 'var(--text-primary)' }}>{attemptTask.notes ? 'Study Material' : 'Ready to begin?'}</h2>
+            <h2 style={{ fontSize: '1.65rem', fontWeight: '900', color: '#f36d44', marginBottom: '0.5rem' }}>{attemptTask.title}</h2>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: '700', marginBottom: '1.25rem', color: 'var(--text-primary)' }}>
+              {attemptTask.notes ? '📖 Study Material & Preparation' : '🚀 Ready to begin?'}
+            </h3>
             {attemptTask.notes ? (
-              <div style={{ marginBottom: '2rem', maxHeight: '300px', overflowY: 'auto', background: '#f8fafc', padding: '1rem', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'pre-wrap' }}>
+              <div style={{ marginBottom: '2rem', maxHeight: '300px', overflowY: 'auto', background: '#f8fafc', padding: '1rem', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'pre-wrap', color: 'black' }}>
                  {attemptTask.notes}
               </div>
             ) : (

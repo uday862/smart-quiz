@@ -155,6 +155,17 @@ const StudentLayout = (props) => {
   const [news, setNews] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [hideLayout, setHideLayout] = useState(false);
+
+  useEffect(() => {
+    const handleExamConfig = (e) => {
+      setHideLayout(!!e.detail?.fullWindow);
+    };
+    window.addEventListener('active_exam_config', handleExamConfig);
+    return () => {
+      window.removeEventListener('active_exam_config', handleExamConfig);
+    };
+  }, []);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/announcements`)
@@ -183,6 +194,16 @@ const StudentLayout = (props) => {
       paddingBottom: '4px', fontSize: '0.875rem', fontWeight: '600', whiteSpace: 'nowrap'
     }
   });
+
+  if (hideLayout) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <main style={{ flex: 1, background: 'var(--bg-color)' }}>
+          {props.children}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>

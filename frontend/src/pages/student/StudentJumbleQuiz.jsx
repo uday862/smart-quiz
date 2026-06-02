@@ -6,6 +6,64 @@ import { io } from 'socket.io-client';
 
 const socket = io(`${API_BASE_URL}`);
 
+// ─── Network Indicator ────────────────────────────────────────────────────────
+const NetworkIndicator = ({ isOnline }) => {
+  const [netSpeed, setNetSpeed] = useState('High');
+
+  useEffect(() => {
+    const updateConnection = () => {
+      if (!navigator.onLine) {
+        setNetSpeed('Offline');
+        return;
+      }
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (conn) {
+        const type = conn.effectiveType; // 'slow-2g', '2g', '3g', '4g'
+        if (type === '4g') setNetSpeed('High');
+        else if (type === '3g') setNetSpeed('Medium');
+        else setNetSpeed('Low');
+      } else {
+        setNetSpeed('High');
+      }
+    };
+
+    updateConnection();
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+      conn.addEventListener('change', updateConnection);
+    }
+    window.addEventListener('online', updateConnection);
+    window.addEventListener('offline', updateConnection);
+
+    return () => {
+      if (conn) conn.removeEventListener('change', updateConnection);
+      window.removeEventListener('online', updateConnection);
+      window.removeEventListener('offline', updateConnection);
+    };
+  }, []);
+
+  const getStatusColor = () => {
+    if (!isOnline || netSpeed === 'Offline') return '#ef4444';
+    if (netSpeed === 'High') return '#22c55e';
+    if (netSpeed === 'Medium') return '#eab308';
+    return '#f97316';
+  };
+
+  const getStatusIcon = () => {
+    if (!isOnline || netSpeed === 'Offline') return '❌';
+    if (netSpeed === 'High') return '📶 High';
+    if (netSpeed === 'Medium') return '📶 Medium';
+    return '⚠️ Low';
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold', color: getStatusColor() }}>
+      <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: getStatusColor() }} />
+      Network: {getStatusIcon()}
+    </div>
+  );
+};
+
 // ─── Keyword Jumble Question ──────────────────────────────────────────────────
 const KeywordJumble = ({ question, qIndex, onAnswer, submitted }) => {
   const correctOrder = (() => { try { return question.correct_answer ? JSON.parse(question.correct_answer) : []; } catch { return []; } })();
@@ -28,6 +86,13 @@ const KeywordJumble = ({ question, qIndex, onAnswer, submitted }) => {
     const ns = [...slots]; ns[slotIdx] = null;
     setPool([...pool, kw]); setSlots(ns);
     onAnswer(qIndex, ns);
+  };
+
+  const clearArrangement = () => {
+    if (submitted) return;
+    setSlots(new Array(question.words.length).fill(null));
+    setPool([...question.words]);
+    onAnswer(qIndex, null);
   };
 
   const isCorrect = submitted && JSON.stringify(slots) === JSON.stringify(correctOrder);
@@ -79,6 +144,25 @@ const KeywordJumble = ({ question, qIndex, onAnswer, submitted }) => {
               );
             })}
           </div>
+          {slots.some(s => s !== null) && !submitted && (
+            <button
+              type="button"
+              onClick={clearArrangement}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#ef4444',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                marginTop: '0.5rem',
+                fontSize: '0.85rem',
+                padding: 0,
+                display: 'block'
+              }}
+            >
+              Clear Arrangement
+            </button>
+          )}
         </div>
 
         {/* Keyword Pool */}
@@ -129,6 +213,12 @@ const MCQQuestion = ({ question, qIndex, onAnswer, submitted }) => {
     onAnswer(qIndex, opt);
   };
 
+  const clearSelection = () => {
+    if (submitted) return;
+    setSelected(null);
+    onAnswer(qIndex, null);
+  };
+
   const isCorrect = submitted && selected === question.correct_answer;
 
   return (
@@ -169,6 +259,25 @@ const MCQQuestion = ({ question, qIndex, onAnswer, submitted }) => {
             </button>
           );
         })}
+        {selected && !submitted && (
+          <button
+            type="button"
+            onClick={clearSelection}
+            style={{
+              alignSelf: 'flex-start',
+              background: 'transparent',
+              border: 'none',
+              color: '#ef4444',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              marginTop: '0.5rem',
+              fontSize: '0.85rem',
+              padding: 0
+            }}
+          >
+            Clear Selection
+          </button>
+        )}
       </div>
     </div>
   );
@@ -183,21 +292,100 @@ const StudentJumbleQuiz = () => {
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(null);
   const [user, setUser] = useState(null);
   const [flags, setFlags] = useState(0);
   const [activeAttemptId, setActiveAttemptId] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isFullscreenEnforced, setIsFullscreenEnforced] = useState(true);
+
   const timerRef = useRef(null);
   const answersRef = useRef({});
   const flagsRef = useRef(0);
 
   const activeAttemptIdRef = useRef(null);
+  const isUnloadingRef = useRef(false);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      isUnloadingRef.current = true;
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (exam && exam.title) {
+      document.title = exam.title;
+    }
+    return () => {
+      document.title = 'Smart Quiz';
+    };
+  }, [exam]);
 
   useEffect(() => {
     answersRef.current = answers;
     flagsRef.current = flags;
     activeAttemptIdRef.current = activeAttemptId;
   }, [answers, flags, activeAttemptId]);
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (exam && exam.fullWindow && !submitted) {
+      setIsFullscreenEnforced(!!document.fullscreenElement);
+    }
+  }, [exam, submitted]);
+
+  useEffect(() => {
+    if (!exam || !exam.fullWindow || submitted) return;
+    const limit = exam.flagLimit !== undefined ? exam.flagLimit : 10;
+    if (flags >= limit) {
+      handleSubmit({ forceSpam: true });
+    }
+  }, [flags, exam, submitted]);
+
+  useEffect(() => {
+    if (!exam || !exam.fullWindow || submitted) return;
+
+    const handleFullscreenChange = () => {
+      if (isUnloadingRef.current) return;
+      setIsFullscreenEnforced(!!document.fullscreenElement);
+      if (!document.fullscreenElement) {
+        setFlags(prev => prev + 1);
+      }
+    };
+
+    const handleVisibilityOrBlur = () => {
+      if (isUnloadingRef.current) return;
+      if (document.hidden || document.visibilityState === 'hidden') {
+        setFlags(prev => prev + 1);
+        alert("Warning: Tab switching/leaving the page is not allowed during this exam!");
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('visibilitychange', handleVisibilityOrBlur);
+    window.addEventListener('blur', handleVisibilityOrBlur);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('visibilitychange', handleVisibilityOrBlur);
+      window.removeEventListener('blur', handleVisibilityOrBlur);
+    };
+  }, [exam, submitted]);
 
   useEffect(() => {
     const activeUser = JSON.parse(localStorage.getItem('user'));
@@ -224,7 +412,7 @@ const StudentJumbleQuiz = () => {
         }
 
         setExam(found);
-        setTimeLeft(found.time_limit * 60);
+        window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: found.fullWindow } }));
 
         const initAns = {};
         found.questions.forEach((q, idx) => {
@@ -233,14 +421,29 @@ const StudentJumbleQuiz = () => {
         });
         setAnswers(initAns);
 
+        let sd;
         try {
           const sr = await fetch(`${API_BASE_URL}/api/attempts/start`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ student: activeUser.id, exam: found._id, ipAddress: '0.0.0.0' })
           });
-          const sd = await sr.json();
+          sd = await sr.json();
           setActiveAttemptId(sd._id);
         } catch (e) { console.error('Start attempt failed', e); }
+
+        // Set remaining time
+        const savedTime = localStorage.getItem(`timeLeft_${found._id}`);
+        if (savedTime) {
+          setTimeLeft(parseInt(savedTime, 10));
+        } else if (sd) {
+          const startTime = new Date(sd.start_time || sd.createdAt).getTime();
+          const timeLimitMs = found.time_limit * 60 * 1000;
+          const elapsedMs = Date.now() - startTime;
+          const remainingSeconds = Math.max(0, Math.floor((timeLimitMs - elapsedMs) / 1000));
+          setTimeLeft(remainingSeconds);
+        } else {
+          setTimeLeft(found.time_limit * 60);
+        }
 
         socket.emit('student_update', {
           id: activeUser.id, roll: activeUser.roll_no, name: activeUser.name,
@@ -249,37 +452,49 @@ const StudentJumbleQuiz = () => {
       } catch (err) { console.error(err); }
     };
     init();
-    return () => clearInterval(timerRef.current);
+    return () => {
+      clearInterval(timerRef.current);
+      window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: false } }));
+    };
   }, [id, navigate]);
 
   useEffect(() => {
-    if (exam && !submitted && timeLeft > 0) {
+    if (exam && !submitted && timeLeft > 0 && isOnline) {
       timerRef.current = setInterval(() => {
         setTimeLeft(prev => Math.max(0, prev - 1));
       }, 1000);
       return () => clearInterval(timerRef.current);
     }
-  }, [exam, submitted]);
+  }, [exam, submitted, timeLeft, isOnline]);
 
   useEffect(() => {
-    if (exam && !submitted && timeLeft === 0) {
+    if (exam && !submitted && timeLeft !== null && timeLeft <= 0) {
       handleSubmit();
     }
   }, [timeLeft, exam, submitted]);
 
+  useEffect(() => {
+    if (exam && timeLeft > 0 && !submitted) {
+      localStorage.setItem(`timeLeft_${id}`, timeLeft.toString());
+    }
+  }, [timeLeft, exam, id, submitted]);
+
   // Cheating detection removed as requested
 
-  const fmt = (s) => `${Math.floor(s / 60)}:${(s % 60 < 10 ? '0' : '')}${s % 60}`;
+  const fmt = (s) => {
+    if (s === null || s === undefined) return '--:--';
+    return `${Math.floor(s / 60)}:${(s % 60 < 10 ? '0' : '')}${s % 60}`;
+  };
 
   const handleAnswer = (qIndex, val) => setAnswers(prev => ({ ...prev, [qIndex]: val }));
 
-  const handleSubmit = async () => {
-    if (!exam || submitted) return;
+  const handleSubmit = async (options = {}) => {
+    if (!exam || submitted || submitting) return;
+    setSubmitting(true);
     const currentAnswers = answersRef.current;
     
     // Set a placeholder score; backend will evaluate
     setScore(0);
-    setSubmitted(true);
     clearInterval(timerRef.current);
 
     try {
@@ -290,6 +505,7 @@ const StudentJumbleQuiz = () => {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             score: 0, flags: flagsRef.current, status: 'completed',
+            spam: !!options?.forceSpam,
             answers: exam.questions.map((q, idx) => ({
               question_id: q._id,
               answer: q.type === 'Jumble' ? JSON.stringify(currentAnswers[idx] || q.words) : (currentAnswers[idx] || '')
@@ -303,9 +519,18 @@ const StudentJumbleQuiz = () => {
             setExam(updatedAttempt.exam); // Updates exam with correct answers from backend
         }
       }
-      socket.emit('student_update', { id: user?.id, status: 'completed', marks: finalScore });
+      socket.emit('student_update', { id: user?.id, status: 'completed', marks: finalScore, spam: !!options?.forceSpam });
+      setSubmitted(true);
+      localStorage.removeItem(`timeLeft_${exam._id}`);
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(err => console.error("Exit fullscreen error", err));
+      }
       setTimeout(() => navigate(`/student/summary/${exam._id}`), 5000);
-    } catch (err) { console.error('Submit failed', err); }
+    } catch (err) {
+      console.error('Submit failed', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!exam) return (
@@ -323,6 +548,72 @@ const StudentJumbleQuiz = () => {
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%)', display: 'flex', flexDirection: 'column' }}>
+      
+      {!isOnline && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(7, 17, 37, 0.96)',
+          zIndex: 13000, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', color: 'white'
+        }}>
+          <div style={{ background: '#1e293b', padding: '2.5rem', borderRadius: '12px', textAlign: 'center', maxWidth: '450px', border: '2px solid #ef4444' }}>
+            <span style={{ fontSize: '3rem', color: '#ef4444', display: 'block', marginBottom: '1rem' }}>⚠️</span>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: '950', marginBottom: '1rem' }}>Internet Connection Lost</h2>
+            <p style={{ color: '#94a3b8', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+              Your timer has been paused. Please check your network cables or Wi-Fi connection. The exam will resume automatically once connection is restored.
+            </p>
+            <div style={{ display: 'inline-block', width: '24px', height: '24px', border: '3px solid #ef4444', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          </div>
+        </div>
+      )}
+
+      {exam && exam.fullWindow && !isFullscreenEnforced && !submitted && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(7, 17, 37, 0.98)',
+          zIndex: 11000, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', color: 'white'
+        }}>
+          <div style={{ background: '#1e293b', padding: '2.5rem', borderRadius: '12px', textAlign: 'center', maxWidth: '480px', border: '2px solid #ef4444' }}>
+            <span style={{ fontSize: '3.5rem', display: 'block', marginBottom: '1rem' }}>🔒</span>
+            <h2 style={{ fontSize: '1.6rem', fontWeight: '900', marginBottom: '1rem', color: '#f36d44' }}>Fullscreen Mode Required</h2>
+            <p style={{ color: '#94a3b8', lineHeight: '1.6', marginBottom: '1.75rem' }}>
+              This exam has been secured by the administrator. To take it, you must remain in fullscreen mode. Switching tabs or exiting fullscreen is recorded.
+            </p>
+            <button
+              onClick={() => {
+                const el = document.documentElement;
+                if (el.requestFullscreen) {
+                  el.requestFullscreen().then(() => {
+                    setIsFullscreenEnforced(true);
+                  }).catch(e => console.error("Fullscreen error", e));
+                }
+              }}
+              style={{
+                background: '#16a34a', color: 'white', padding: '0.85rem 2.5rem',
+                border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: '900',
+                cursor: 'pointer', boxShadow: '0 4px 14px rgba(22,163,74,0.4)'
+              }}
+            >
+              Enter Fullscreen & Continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {submitting && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(7, 17, 37, 0.95)',
+          zIndex: 12000, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', color: 'white'
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ display: 'inline-block', width: '50px', height: '50px', border: '5px solid #7c3aed', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }} />
+            <h2 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'white', marginBottom: '0.5rem' }}>Grading Your Answers</h2>
+            <p style={{ color: '#c4b5fd', fontSize: '1rem' }}>Evaluating code and compiling scores, please do not close this window...</p>
+          </div>
+        </div>
+      )}
+
+
 
       {/* ── Sticky Header ── */}
       <header style={{
@@ -331,9 +622,11 @@ const StudentJumbleQuiz = () => {
         padding: '0.85rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-          <button onClick={() => navigate('/student')} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.4rem 0.75rem', borderRadius: '8px', fontWeight: '600' }}>
-            <ArrowLeft size={14} /> Back
-          </button>
+          {(!exam || !exam.fullWindow) && (
+            <button onClick={() => navigate('/student')} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.4rem 0.75rem', borderRadius: '8px', fontWeight: '600' }}>
+              <ArrowLeft size={14} /> Back
+            </button>
+          )}
           <div>
             <div style={{ fontSize: '1rem', fontWeight: '900', color: 'white', letterSpacing: '-0.3px' }}>{exam.title}</div>
             <div style={{ fontSize: '0.7rem', color: '#a78bfa', fontWeight: '600', marginTop: '1px' }}>
@@ -343,6 +636,7 @@ const StudentJumbleQuiz = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <NetworkIndicator isOnline={isOnline} />
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '0.55rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Questions</div>
             <div style={{ fontWeight: '900', fontSize: '1.1rem', color: '#e2e8f0' }}>{totalQ}</div>
