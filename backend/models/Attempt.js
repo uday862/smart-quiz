@@ -13,6 +13,7 @@ const attemptSchema = new mongoose.Schema({
     start_time: { type: Date, default: Date.now },
     end_time: { type: Date },
     maxScore: { type: Number, default: 0 },
+    spam: { type: Boolean, default: false },
     answers: [{
         question_id: { type: mongoose.Schema.Types.ObjectId },
         answer: { type: mongoose.Schema.Types.Mixed }, // String for MCQ, code, etc.

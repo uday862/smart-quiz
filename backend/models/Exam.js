@@ -26,8 +26,9 @@ const examSchema = new mongoose.Schema({
     allowedGroups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Group' }], // Array of group IDs
     isDeleted: { type: Boolean, default: false },
     isResource: { type: Boolean, default: false },
-    resourceFolderId: { type: mongoose.Schema.Types.ObjectId, ref: 'ResourceFolder' }
-
+    resourceFolderId: { type: mongoose.Schema.Types.ObjectId, ref: 'ResourceFolder' },
+    fullWindow: { type: Boolean, default: false },
+    flagLimit: { type: Number, default: 10 }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Exam', examSchema);

@@ -57,7 +57,10 @@ router.get('/:id', requireAuth, async (req, res) => {
 // Get active attempts for live monitoring (admin) / leaderboard (student)
 router.get('/task/:taskId', requireAuth, async (req, res) => {
     try {
-        const attempts = await Attempt.find({ exam: req.params.taskId }).populate('student', 'name roll_no avatar_color').lean();
+        const attempts = await Attempt.find({ exam: req.params.taskId })
+            .populate('student', 'name roll_no avatar_color')
+            .populate('exam', 'title questions flagLimit')
+            .lean();
         // Ensure ipAddress populated
         attempts.forEach(att => {
           if (!att.ipAddress) {
@@ -118,8 +121,8 @@ router.post('/start', requireAuth, async (req, res) => {
 // Submit/Update an attempt
 router.put('/:id/submit', requireAuth, async (req, res) => {
     try {
-        const { score: clientScore, status, answers, flags } = req.body;
-        const attempt = await Attempt.findById(req.params.id).populate('exam', 'title questions');
+        const { score: clientScore, status, answers, flags, spam } = req.body;
+        const attempt = await Attempt.findById(req.params.id).populate('exam', 'title questions flagLimit fullWindow');
         
         if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
 
@@ -238,7 +241,16 @@ router.put('/:id/submit', requireAuth, async (req, res) => {
         attempt.status = status;
         attempt.answers = answers;
         attempt.flags = flags;
+        
+        const maxFlagsAllowed = (attempt.exam && typeof attempt.exam.flagLimit === 'number') ? attempt.exam.flagLimit : 10;
+        if (spam || flags >= maxFlagsAllowed) {
+            attempt.spam = true;
+        }
+        
         attempt.submissions += 1;
+        if (status === 'completed' && !attempt.end_time) {
+            attempt.end_time = new Date();
+        }
         
         await attempt.save();
 
