@@ -83,6 +83,87 @@ const StudentSQLIDE = () => {
     const flagsRef = useRef(0);
     const isUnloadingRef = useRef(false);
 
+    const [activeLeftTab, setActiveLeftTab] = useState('description'); // 'description' or 'schema'
+    const [activeConsoleTab, setActiveConsoleTab] = useState('testcase'); // 'testcase' or 'result'
+    const [autoBrackets, setAutoBrackets] = useState(true);
+    const [activeTestCaseIdx, setActiveTestCaseIdx] = useState(0);
+
+    const lineNumbersRef = useRef(null);
+    const textareaRef = useRef(null);
+
+    const handleScroll = () => {
+        if (lineNumbersRef.current && textareaRef.current) {
+            lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop;
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        const { key, target } = e;
+        const { selectionStart, selectionEnd, value } = target;
+
+        // Tab key indentation
+        if (key === 'Tab') {
+            e.preventDefault();
+            const tabSpaces = '    ';
+            const newValue = value.substring(0, selectionStart) + tabSpaces + value.substring(selectionEnd);
+            setQuery(newValue);
+            setTimeout(() => {
+                target.selectionStart = target.selectionEnd = selectionStart + tabSpaces.length;
+            }, 0);
+            return;
+        }
+
+        if (!autoBrackets) return;
+
+        const pairs = {
+            '(': ')',
+            '[': ']',
+            '{': '}',
+            "'": "'",
+            '"': '"',
+            '`': '`'
+        };
+
+        if (pairs[key]) {
+            e.preventDefault();
+            const closingChar = pairs[key];
+            const selection = value.substring(selectionStart, selectionEnd);
+            const newValue = value.substring(0, selectionStart) + key + selection + closingChar + value.substring(selectionEnd);
+            setQuery(newValue);
+
+            setTimeout(() => {
+                if (selection) {
+                    target.selectionStart = selectionStart + 1;
+                    target.selectionEnd = selectionEnd + 1;
+                } else {
+                    target.selectionStart = target.selectionEnd = selectionStart + 1;
+                }
+            }, 0);
+            return;
+        }
+
+        if (key === 'Backspace' && selectionStart === selectionEnd) {
+            const charBefore = value[selectionStart - 1];
+            const charAfter = value[selectionStart];
+            const matchingPairs = {
+                '(': ')',
+                '[': ']',
+                '{': '}',
+                "'": "'",
+                '"': '"',
+                '`': '`'
+            };
+            if (matchingPairs[charBefore] === charAfter) {
+                e.preventDefault();
+                const newValue = value.substring(0, selectionStart - 1) + value.substring(selectionStart + 1);
+                setQuery(newValue);
+                setTimeout(() => {
+                    target.selectionStart = target.selectionEnd = selectionStart - 1;
+                }, 0);
+            }
+        }
+    };
+
     useEffect(() => {
         flagsRef.current = flags;
     }, [flags]);
@@ -134,6 +215,7 @@ const StudentSQLIDE = () => {
 
                 // Fetch/Start Attempt immediately
                 let startData;
+                let activeHasDraft = false;
                 try {
                     const startRes = await fetch(`${API_BASE_URL}/api/attempts/start`, {
                         method: 'POST',
@@ -143,8 +225,9 @@ const StudentSQLIDE = () => {
                     if (startRes.ok) {
                         startData = await startRes.json();
                         setActiveAttemptId(startData._id);
-                        if (startData.answers && startData.answers.length > 0) {
-                            setQuery(startData.answers[0].answer || 'SELECT * FROM test;');
+                        if (startData.answers && startData.answers.length > 0 && startData.answers[0].answer) {
+                            setQuery(startData.answers[0].answer);
+                            activeHasDraft = true;
                         }
                     }
                 } catch (e) {
@@ -161,9 +244,20 @@ const StudentSQLIDE = () => {
                             navigate(`/student/summary/${found._id}`);
                             return;
                         }
-                        if (pastAttempts.length > 0) {
-                            pastAttempts.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-                            setLatestScore(pastAttempts[0].score || 0);
+                        if (completedAttempts.length > 0) {
+                            completedAttempts.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+                            setLatestScore(completedAttempts[0].score || 0);
+                        } else {
+                            setLatestScore(0);
+                        }
+
+                        // Load the most recently written query from any past attempts if there's no active draft
+                        if (!activeHasDraft && pastAttempts.length > 0) {
+                            const sortedAttempts = [...pastAttempts].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+                            const attemptWithAnswers = sortedAttempts.find(a => a.answers && a.answers.length > 0 && a.answers[0].answer);
+                            if (attemptWithAnswers) {
+                                setQuery(attemptWithAnswers.answers[0].answer);
+                            }
                         }
                     }
                 } catch (e) {
@@ -327,7 +421,7 @@ const StudentSQLIDE = () => {
                 const truthStr = truthOutput !== undefined ? JSON.stringify(truthOutput) : 'null';
                 
                 // Don't pass if both are just empty or null due to bad query
-                const isMatch = (userStr === truthStr) && userStr !== 'null' && userStr !== '[]';
+                const isMatch = (userStr === truthStr) && userStr !== 'null';
                 if (isMatch) passed++;
                 
                 localResults.push({ id: i + 1, passed: isMatch, output: userOutput, expected: truthOutput, error: null });
@@ -401,8 +495,123 @@ const StudentSQLIDE = () => {
     const currentQ = exam.questions[0];
 
     return (
-        <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto', fontFamily: 'sans-serif' }}>
-            
+        <div style={{ 
+            height: '100vh', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            background: '#121212', 
+            color: '#e0e0e0', 
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+            overflow: 'hidden'
+        }}>
+            <style>{`
+                .sql-ide-scrollbar::-webkit-scrollbar {
+                    width: 6px;
+                    height: 6px;
+                }
+                .sql-ide-scrollbar::-webkit-scrollbar-track {
+                    background: #181818;
+                }
+                .sql-ide-scrollbar::-webkit-scrollbar-thumb {
+                    background: #333333;
+                    border-radius: 3px;
+                }
+                .sql-ide-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #444444;
+                }
+                .code-textarea {
+                    tab-size: 4;
+                    caret-color: #38bdf8;
+                }
+                .code-textarea::selection {
+                    background: rgba(56, 189, 248, 0.2);
+                }
+                .tab-button {
+                    background: transparent;
+                    color: #8c8c8c;
+                    border: none;
+                    padding: 0.6rem 1.2rem;
+                    font-size: 0.85rem;
+                    font-weight: 500;
+                    cursor: pointer;
+                    position: relative;
+                    transition: color 0.2s;
+                }
+                .tab-button:hover {
+                    color: #ffffff;
+                }
+                .tab-button.active {
+                    color: #ffffff;
+                }
+                .tab-button.active::after {
+                    content: '';
+                    position: absolute;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    height: 2px;
+                    background: #3b82f6;
+                }
+                .badge {
+                    padding: 0.25rem 0.5rem;
+                    border-radius: 4px;
+                    font-size: 0.75rem;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                }
+                .badge-easy {
+                    background: rgba(34, 197, 94, 0.15);
+                    color: #22c55e;
+                }
+                .badge-medium {
+                    background: rgba(234, 179, 8, 0.15);
+                    color: #eab308;
+                }
+                .console-btn {
+                    padding: 0.4rem 0.8rem;
+                    background: #1e1e1e;
+                    color: #d4d4d4;
+                    border: 1px solid #333;
+                    border-radius: 4px;
+                    font-size: 0.8rem;
+                    cursor: pointer;
+                    transition: background 0.15s, border-color 0.15s;
+                }
+                .console-btn:hover {
+                    background: #2a2a2a;
+                    border-color: #444444;
+                    color: #ffffff;
+                }
+                .console-btn.active {
+                    background: #333333;
+                    border-color: #3b82f6;
+                    color: #ffffff;
+                }
+                .action-btn {
+                    padding: 0.5rem 1rem;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 0.85rem;
+                    font-weight: bold;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.4rem;
+                    transition: opacity 0.15s, transform 0.1s;
+                }
+                .action-btn:active {
+                    transform: scale(0.97);
+                }
+                .action-btn:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
+
             {!isOnline && (
               <div style={{
                 position: 'fixed', inset: 0, background: 'rgba(7, 17, 37, 0.96)',
@@ -466,171 +675,562 @@ const StudentSQLIDE = () => {
                 </div>
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #ddd', paddingBottom: '1rem' }}>
-                <div>
-                   <h1 style={{ fontWeight: '900', color: 'var(--text-primary)', margin: 0, fontSize: '2rem' }}>{exam.title}</h1>
-                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem', color: '#64748b', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                      <Database size={14} /> Local ALASQL Runtime Engine Active
-                   </div>
+
+            {/* ─── Header Bar ─── */}
+            <div style={{ 
+                height: '55px', 
+                background: '#1e1e1e', 
+                borderBottom: '1px solid #2d2d2d', 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                padding: '0 1.5rem',
+                zIndex: 100
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ background: '#3b82f6', color: 'white', padding: '0.35rem 0.75rem', borderRadius: '6px', fontWeight: '950', fontSize: '0.9rem', letterSpacing: '0.5px' }}>
+                        SMART QUIZ
+                    </div>
+                    <span style={{ color: '#555' }}>|</span>
+                    <h1 style={{ fontWeight: '700', color: '#ffffff', margin: 0, fontSize: '1.1rem' }}>{exam.title}</h1>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <NetworkIndicator isOnline={isOnline} />
-                   {timeLeft !== null && timeLeft >= 0 && (
-                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: timeLeft < 60 ? '#fee2e2' : '#fef3c7', border: `1px solid ${timeLeft < 60 ? '#fca5a5' : '#fde68a'}`, padding: '0.4rem 0.9rem', borderRadius: '4px' }}>
-                           <Clock size={16} color={timeLeft < 60 ? '#ef4444' : '#d97706'} />
-                           <span style={{ fontWeight: 'bold', color: timeLeft < 60 ? '#ef4444' : '#d97706' }}>
-                               {Math.floor(timeLeft / 60)}:{(timeLeft % 60 < 10 ? '0' : '')}{timeLeft % 60}
-                           </span>
-                       </div>
-                   )}
-                  {latestScore !== null && (
-                      <div style={{ background: '#f8fafc', padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderRadius: '4px', fontWeight: 'bold', color: '#0f172a' }}>
-                         Latest Score: <span style={{ color: latestScore >= 50 ? '#16a34a' : '#ef4444' }}>{latestScore} / 100</span>
-                      </div>
-                  )}
-                  <button 
-                    onClick={async () => {
-                      if (!exam?._id || !user?.id) return alert('Session error');
-                      const res = await fetch(`${API_BASE_URL}/api/attempts/start`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ student: user.id, exam: exam._id })
-                      });
-                      const attemptData = await res.json();
-                      await fetch(`${API_BASE_URL}/api/attempts/${attemptData._id}/save-query`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ query })
-                      });
-                      alert('Query saved!');
-                    }}
-                    style={{ background: '#3b82f6', color: 'white', padding: '0.75rem 1.5rem', fontWeight: '900', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}
-                  >
-                     <Save size={16} /> SAVE CODE
-                  </button>
-                  <button 
-                    onClick={handleSubmitAttempt}
-                    disabled={!result}
-                    style={{ background: result ? '#16a34a' : '#cbd5e1', color: 'white', padding: '0.75rem 2rem', fontWeight: '900', border: 'none', borderRadius: '4px', cursor: result ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                  >
-                     <Save size={16} /> SUBMIT FOR SCORING
-                  </button>
+                    
+                    {timeLeft !== null && timeLeft >= 0 && (
+                        <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.4rem', 
+                            background: timeLeft < 60 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(251, 191, 36, 0.15)', 
+                            border: `1px solid ${timeLeft < 60 ? '#ef4444' : '#d97706'}`, 
+                            padding: '0.35rem 0.75rem', 
+                            borderRadius: '6px',
+                            fontSize: '0.85rem'
+                        }}>
+                            <Clock size={14} color={timeLeft < 60 ? '#ef4444' : '#f59e0b'} />
+                            <span style={{ fontWeight: 'bold', color: timeLeft < 60 ? '#ef4444' : '#f59e0b', fontFamily: 'monospace' }}>
+                                {Math.floor(timeLeft / 60)}:{(timeLeft % 60 < 10 ? '0' : '')}{timeLeft % 60}
+                            </span>
+                        </div>
+                    )}
+
+                    {latestScore !== null && (
+                        <div style={{ 
+                            background: '#2d2d2d', 
+                            padding: '0.35rem 0.75rem', 
+                            border: '1px solid #3d3d3d', 
+                            borderRadius: '6px', 
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold', 
+                            color: '#ffffff' 
+                        }}>
+                           Score: <span style={{ color: latestScore >= 50 ? '#22c55e' : '#ef4444' }}>{latestScore} / 100</span>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '2.5rem', minHeight: '600px' }}>
-                {/* Information Panel */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div style={{ background: 'var(--surface-color)', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.5rem', maxHeight: '50%', overflowY: 'auto' }}>
-                       <h3 style={{ margin: 0, marginBottom: '1rem', color: 'var(--text-primary)', fontWeight: '900', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>Scenario Brief</h3>
-                       <p style={{ color: '#334155', fontSize: '0.95rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{currentQ.text}</p>
-                       
-                       {currentQ.sample_input && (
-                          <div style={{ marginTop: '1.5rem' }}>
-                            <h4 style={{ margin: 0, marginBottom: '0.5rem', color: '#475569', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Sample Table Data</h4>
-                            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '4px', border: '1px solid #e2e8f0', fontFamily: 'monospace', fontSize: '0.85rem', whiteSpace: 'pre-wrap', color: '#0f172a' }}>
-                              {currentQ.sample_input}
-                            </div>
-                          </div>
-                       )}
-
-                       {currentQ.sample_output && (
-                          <div style={{ marginTop: '1.5rem' }}>
-                            <h4 style={{ margin: 0, marginBottom: '0.5rem', color: '#475569', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Expected Output Format</h4>
-                            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '4px', border: '1px solid #e2e8f0', fontFamily: 'monospace', fontSize: '0.85rem', whiteSpace: 'pre-wrap', color: '#0f172a' }}>
-                              {currentQ.sample_output}
-                            </div>
-                          </div>
-                       )}
+            {/* ─── Main Content Workspace ─── */}
+            <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+                
+                {/* ─── LEFT PANEL: Question Description ─── */}
+                <div style={{ 
+                    flex: 1, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    background: '#1a1a1a', 
+                    borderRight: '1px solid #2d2d2d', 
+                    minWidth: 0 
+                }}>
+                    {/* Tab Navigation */}
+                    <div style={{ display: 'flex', background: '#222222', borderBottom: '1px solid #2d2d2d' }}>
+                        <button 
+                            className={`tab-button ${activeLeftTab === 'description' ? 'active' : ''}`}
+                            onClick={() => setActiveLeftTab('description')}
+                        >
+                            Description
+                        </button>
+                        <button 
+                            className={`tab-button ${activeLeftTab === 'schema' ? 'active' : ''}`}
+                            onClick={() => setActiveLeftTab('schema')}
+                        >
+                            Database Schema
+                        </button>
                     </div>
 
-                    <div style={{ background: '#071125', borderRadius: '8px', overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                       <div style={{ background: '#1e293b', padding: '0.75rem 1rem', color: 'white', fontWeight: 'bold', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
-                          <span>SQL TERMINAL</span>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                             {query && !submitted && (
-                                  <button 
-                                    onClick={() => setQuery('')} 
-                                    style={{ background: '#ef4444', color: 'white', border: 'none', fontSize: '0.7rem', fontWeight: 'bold', padding: '0.3rem 0.75rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem' }}
-                                  >
-                                    CLEAR TERMINAL
-                                  </button>
-                               )}<button onClick={() => handleRunPatternMatch(true)} style={{ background: '#3b82f6', color: 'white', border: 'none', fontSize: '0.7rem', fontWeight: 'bold', padding: '0.3rem 1rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Play size={10}/> RUN CODE (DEBUG)</button>
-                              <button onClick={() => handleRunPatternMatch(false)} style={{ background: '#22c55e', color: 'white', border: 'none', fontSize: '0.7rem', fontWeight: 'bold', padding: '0.3rem 1rem', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Server size={10}/> EVALUATE HIDDEN</button>
-                          </div>
-                       </div>
-                       <textarea
-                         value={query}
-                         onChange={e => setQuery(e.target.value)}
-                         style={{ background: 'transparent', color: '#38bdf8', border: 'none', padding: '1rem', width: '100%', flex: 1, outline: 'none', fontFamily: 'monospace', fontSize: '1rem', resize: 'none' }}
-                         spellCheck={false}
-                       />
+                    {/* Tab Content */}
+                    <div className="sql-ide-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
+                        {activeLeftTab === 'description' ? (
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '1.2rem' }}>
+                                    <h2 style={{ margin: 0, fontSize: '1.6rem', fontWeight: '800', color: '#ffffff' }}>SQL Query Problem</h2>
+                                    <span className="badge badge-easy">Easy</span>
+                                    <span style={{ fontSize: '0.8rem', color: '#888', fontWeight: 'bold' }}>100 Marks</span>
+                                </div>
+                                
+                                <p style={{ 
+                                    color: '#d4d4d4', 
+                                    fontSize: '0.95rem', 
+                                    lineHeight: '1.7', 
+                                    whiteSpace: 'pre-wrap', 
+                                    background: '#222222',
+                                    padding: '1.2rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #2d2d2d'
+                                }}>
+                                    {currentQ.text}
+                                </p>
+                                
+                                {currentQ.sample_input && (
+                                    <div style={{ marginTop: '2rem' }}>
+                                        <h4 style={{ margin: '0 0 0.6rem 0', color: '#a0a0a0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Sample Table Data</h4>
+                                        <pre style={{ 
+                                            background: '#121212', 
+                                            padding: '1.2rem', 
+                                            borderRadius: '6px', 
+                                            border: '1px solid #2d2d2d', 
+                                            fontFamily: 'Fira Code, monospace', 
+                                            fontSize: '0.85rem', 
+                                            overflowX: 'auto', 
+                                            color: '#e0e0e0',
+                                            margin: 0
+                                        }}>
+                                            {currentQ.sample_input}
+                                        </pre>
+                                    </div>
+                                )}
+
+                                {currentQ.sample_output && (
+                                    <div style={{ marginTop: '2rem' }}>
+                                        <h4 style={{ margin: '0 0 0.6rem 0', color: '#a0a0a0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Expected Output Format</h4>
+                                        <pre style={{ 
+                                            background: '#121212', 
+                                            padding: '1.2rem', 
+                                            borderRadius: '6px', 
+                                            border: '1px solid #2d2d2d', 
+                                            fontFamily: 'Fira Code, monospace', 
+                                            fontSize: '0.85rem', 
+                                            overflowX: 'auto', 
+                                            color: '#38bdf8',
+                                            margin: 0
+                                        }}>
+                                            {currentQ.sample_output}
+                                        </pre>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div>
+                                <h3 style={{ margin: '0 0 1rem 0', color: '#ffffff', fontSize: '1.2rem', fontWeight: '700' }}>Alasql / SQLite Database Seeding Schema</h3>
+                                <p style={{ color: '#a0a0a0', fontSize: '0.9rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+                                    The following table schema is loaded when executing query simulations. You can reference these tables and column layouts in your queries.
+                                </p>
+                                <pre style={{ 
+                                    background: '#121212', 
+                                    padding: '1.2rem', 
+                                    borderRadius: '6px', 
+                                    border: '1px solid #2d2d2d', 
+                                    fontFamily: 'Fira Code, monospace', 
+                                    fontSize: '0.85rem', 
+                                    overflowX: 'auto', 
+                                    color: '#22c55e',
+                                    whiteSpace: 'pre-wrap',
+                                    lineHeight: '1.6',
+                                    margin: 0
+                                }}>
+                                    {currentQ.sql_init || 'CREATE TABLE test(id INT);'}
+                                </pre>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Validation Render Panel */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div style={{ background: 'var(--surface-color)', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                        <h3 style={{ margin: 0, marginBottom: '1rem', color: 'var(--text-primary)', fontWeight: '900', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>Simulation Results</h3>
-                        
-                        {error && (
-                            <div style={{ padding: '1rem', background: '#fef2f2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '4px', fontFamily: 'monospace' }}>
-                                Fatal Database Error: {error}
+                {/* ─── RIGHT PANEL: Editor (Top) & Results (Bottom) ─── */}
+                <div style={{ 
+                    flex: 1, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    background: '#1e1e1e', 
+                    minWidth: 0 
+                }}>
+                    
+                    {/* TOP: Code Editor Pane */}
+                    <div style={{ 
+                        flex: 6, 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        borderBottom: '4px solid #2d2d2d',
+                        minHeight: 0
+                    }}>
+                        {/* Editor Header */}
+                        <div style={{ 
+                            height: '40px', 
+                            background: '#222222', 
+                            borderBottom: '1px solid #2d2d2d', 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center', 
+                            padding: '0 1rem' 
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ffffff', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                                <span>Code Editor (MySQL Syntax)</span>
                             </div>
-                        )}
 
-                        {!error && result && (
-                            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                               {!isPublicMode && (
-                                   <div style={{ padding: '1rem', background: isPassed === 100 ? '#f0fdf4' : '#fffbeb', color: isPassed === 100 ? '#16a34a' : '#b45309', border: `1px solid ${isPassed === 100 ? '#bbf7d0' : '#fde68a'}`, borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
-                                      {isPassed === 100 ? <Check size={18}/> : <X size={18}/>} 
-                                      Overall Score: {isPassed} / 100
-                                   </div>
-                               )}
-                               
-                               {result.map(res => (
-                                  <div key={res.id} style={{ border: '1px solid #e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
-                                     <div style={{ background: res.passed ? '#f0fdf4' : '#fef2f2', padding: '0.75rem', fontWeight: 'bold', color: res.passed ? '#15803d' : '#b91c1c', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between' }}>
-                                        <span>Test Case {res.id} {isPublicMode && '(Public Sample)'}</span>
-                                        <span>{res.passed ? 'PASSED' : 'FAILED'}</span>
-                                     </div>
-                                     
-                                     {isPublicMode && res.output && (
-                                         <div style={{ padding: '0.5rem', display: 'flex', gap: '1rem', flexDirection: 'column' }}>
-                                            <div style={{ flex: 1 }}>
-                                                <h5 style={{ margin: '0 0 0.5rem 0', color: '#475569' }}>Your Output:</h5>
-                                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-                                                  <thead><tr style={{ background: '#f8fafc' }}>
-                                                     {res.output.length > 0 ? Object.keys(res.output[0]).map(k => <th key={k} style={{ padding: '0.5rem', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>{k}</th>) : <th>(Empty Output)</th>}
-                                                  </tr></thead>
-                                                  <tbody>
-                                                     {res.output.map((row, i) => <tr key={i}>{Object.values(row).map((v, j) => <td key={j} style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9', color: !res.passed ? '#ef4444' : 'inherit' }}>{String(v)}</td>)}</tr>)}
-                                                  </tbody>
-                                                </table>
-                                            </div>
-                                            {!res.passed && res.expected && (
-                                              <div style={{ flex: 1, marginTop: '0.5rem', padding: '1rem', background: '#f0fdf4', border: '1px dashed #bbf7d0', borderRadius: '4px' }}>
-                                                  <h5 style={{ margin: '0 0 0.5rem 0', color: '#16a34a' }}>Expected Target Output:</h5>
-                                                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-                                                    <thead><tr style={{ background: 'var(--surface-color)' }}>
-                                                       {res.expected.length > 0 ? Object.keys(res.expected[0]).map(k => <th key={k} style={{ padding: '0.5rem', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>{k}</th>) : <th>(Empty Output)</th>}
-                                                    </tr></thead>
-                                                    <tbody>
-                                                       {res.expected.map((row, i) => <tr key={i}>{Object.values(row).map((v, j) => <td key={j} style={{ padding: '0.5rem', borderBottom: '1px solid #f1f5f9', color: '#16a34a', fontWeight: 'bold' }}>{String(v)}</td>)}</tr>)}
-                                                    </tbody>
-                                                  </table>
-                                              </div>
-                                            )}
-                                         </div>
-                                     )}
-                                     {isPublicMode && res.error && (
-                                         <div style={{ padding: '0.5rem', color: '#ef4444', fontFamily: 'monospace' }}>Error executing public sample: {res.error}</div>
-                                     )}
-                                  </div>
-                               ))}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#a0a0a0', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={autoBrackets} 
+                                        onChange={(e) => setAutoBrackets(e.target.checked)} 
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                    Auto Brackets
+                                </label>
+                                {query && !submitted && (
+                                    <button 
+                                        onClick={() => setQuery('')}
+                                        style={{ 
+                                            background: 'transparent', 
+                                            color: '#ef4444', 
+                                            border: 'none', 
+                                            fontSize: '0.75rem', 
+                                            fontWeight: 'bold', 
+                                            cursor: 'pointer',
+                                            padding: 0
+                                        }}
+                                    >
+                                        Clear Code
+                                    </button>
+                                )}
                             </div>
-                        )}
-                        {!error && !result && <div style={{ color: '#94a3b8', fontSize: '0.9rem', fontStyle: 'italic', textAlign: 'center', paddingTop: '4rem' }}>Awaiting valid syntactical input sequence...</div>}
+                        </div>
+
+                        {/* Editor Input with gutter */}
+                        <div style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
+                            {/* Gutter */}
+                            <div 
+                                ref={lineNumbersRef}
+                                className="sql-ide-scrollbar"
+                                style={{
+                                    width: '3rem',
+                                    padding: '1rem 0.5rem',
+                                    background: '#1a1a1a',
+                                    color: '#555555',
+                                    fontFamily: 'Fira Code, monospace',
+                                    fontSize: '0.9rem',
+                                    lineHeight: '1.5rem',
+                                    textAlign: 'right',
+                                    userSelect: 'none',
+                                    overflowY: 'hidden',
+                                    borderRight: '1px solid #2d2d2d'
+                                }}
+                            >
+                                {Array.from({ length: query.split('\n').length || 1 }, (_, i) => (
+                                    <div key={i} style={{ height: '1.5rem' }}>{i + 1}</div>
+                                ))}
+                            </div>
+
+                            {/* Textarea */}
+                            <textarea
+                                ref={textareaRef}
+                                value={query}
+                                onChange={e => setQuery(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                onScroll={handleScroll}
+                                className="code-textarea sql-ide-scrollbar"
+                                style={{
+                                    flex: 1,
+                                    background: '#1e1e1e',
+                                    color: '#9cdcfe',
+                                    border: 'none',
+                                    padding: '1rem',
+                                    margin: 0,
+                                    outline: 'none',
+                                    fontFamily: 'Fira Code, monospace',
+                                    fontSize: '0.9rem',
+                                    lineHeight: '1.5rem',
+                                    resize: 'none',
+                                    whiteSpace: 'pre',
+                                    overflow: 'auto'
+                                }}
+                                placeholder="-- Type your SQL query here"
+                                spellCheck={false}
+                            />
+                        </div>
+                    </div>
+
+                    {/* BOTTOM: Results Console */}
+                    <div style={{ 
+                        flex: 4, 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        background: '#151515',
+                        minHeight: 0
+                    }}>
+                        {/* Console Tabs */}
+                        <div style={{ display: 'flex', background: '#222222', borderBottom: '1px solid #2d2d2d' }}>
+                            <button 
+                                className={`tab-button ${activeConsoleTab === 'testcase' ? 'active' : ''}`}
+                                onClick={() => setActiveConsoleTab('testcase')}
+                            >
+                                Testcase Details
+                            </button>
+                            <button 
+                                className={`tab-button ${activeConsoleTab === 'result' ? 'active' : ''}`}
+                                onClick={() => setActiveConsoleTab('result')}
+                            >
+                                Test Results
+                            </button>
+                        </div>
+
+                        {/* Console Body */}
+                        <div className="sql-ide-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '1.2rem' }}>
+                            {activeConsoleTab === 'testcase' ? (
+                                <div>
+                                    {/* Testcase Buttons */}
+                                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                                        {currentQ.test_cases?.map((tc, idx) => (
+                                            <button
+                                                key={idx}
+                                                className={`console-btn ${activeTestCaseIdx === idx ? 'active' : ''}`}
+                                                onClick={() => setActiveTestCaseIdx(idx)}
+                                            >
+                                                Case {idx + 1}
+                                            </button>
+                                        )) || <span style={{ color: '#888' }}>No custom test cases configured</span>}
+                                    </div>
+                                    
+                                    {currentQ.test_cases?.[activeTestCaseIdx] && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                            <div>
+                                                <div style={{ color: '#a8a8a8', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Seed Test Query:</div>
+                                                <pre style={{ margin: 0, padding: '0.8rem', background: '#222222', borderRadius: '4px', border: '1px solid #2d2d2d', color: '#d4d4d4', fontFamily: 'monospace', fontSize: '0.8rem', overflowX: 'auto' }}>
+                                                    {currentQ.test_cases[activeTestCaseIdx].input}
+                                                </pre>
+                                            </div>
+                                            <div>
+                                                <div style={{ color: '#a8a8a8', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Target Expected JSON Output:</div>
+                                                <pre style={{ margin: 0, padding: '0.8rem', background: '#222222', borderRadius: '4px', border: '1px solid #2d2d2d', color: '#22c55e', fontFamily: 'monospace', fontSize: '0.8rem', overflowX: 'auto' }}>
+                                                    {currentQ.test_cases[activeTestCaseIdx].output}
+                                                </pre>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div>
+                                    {error && (
+                                        <div style={{ padding: '0.8rem 1.2rem', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                                            Fatal Database Error: {error}
+                                        </div>
+                                    )}
+
+                                    {!error && result && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                            {/* Summary Score */}
+                                            {!isPublicMode && (
+                                                <div style={{ 
+                                                    padding: '0.8rem 1.2rem', 
+                                                    background: isPassed === 100 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(251, 191, 36, 0.15)', 
+                                                    color: isPassed === 100 ? '#22c55e' : '#fbbf24', 
+                                                    border: `1px solid ${isPassed === 100 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(251, 191, 36, 0.3)'}`, 
+                                                    borderRadius: '6px', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '0.5rem', 
+                                                    fontWeight: 'bold',
+                                                    fontSize: '0.9rem'
+                                                }}>
+                                                    {isPassed === 100 ? <Check size={16}/> : <X size={16}/>} 
+                                                    Evaluation Score: {isPassed} / 100 (Passed {result.filter(r => r.passed).length}/{result.length} test cases)
+                                                </div>
+                                            )}
+
+                                            {/* Results details */}
+                                            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                                {result.map((res, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        className={`console-btn ${activeTestCaseIdx === idx ? 'active' : ''}`}
+                                                        style={{
+                                                            borderBottom: `2.5px solid ${res.passed ? '#22c55e' : '#ef4444'}`
+                                                        }}
+                                                        onClick={() => setActiveTestCaseIdx(idx)}
+                                                    >
+                                                        Case {idx + 1} {res.passed ? '✓' : '✗'}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {result[activeTestCaseIdx] && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid #2d2d2d', borderRadius: '6px', background: '#1c1c1c', padding: '1rem' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid #2d2d2d' }}>
+                                                        <span style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>Test Case {activeTestCaseIdx + 1} Details</span>
+                                                        <span style={{ 
+                                                            fontWeight: 'bold', 
+                                                            fontSize: '0.8rem',
+                                                            color: result[activeTestCaseIdx].passed ? '#22c55e' : '#ef4444' 
+                                                        }}>
+                                                            {result[activeTestCaseIdx].passed ? 'PASSED' : 'FAILED'}
+                                                        </span>
+                                                    </div>
+
+                                                    {isPublicMode && result[activeTestCaseIdx].output && (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                            <div>
+                                                                <h5 style={{ margin: '0 0 0.4rem 0', color: '#a0a0a0', fontSize: '0.8rem' }}>Your Query Output:</h5>
+                                                                {result[activeTestCaseIdx].output.length > 0 ? (
+                                                                    <div style={{ overflowX: 'auto' }}>
+                                                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem', color: '#d4d4d4' }}>
+                                                                            <thead>
+                                                                                <tr style={{ background: '#252526', borderBottom: '1px solid #333' }}>
+                                                                                    {Object.keys(result[activeTestCaseIdx].output[0]).map(k => (
+                                                                                        <th key={k} style={{ padding: '0.4rem 0.6rem', fontWeight: 'bold' }}>{k}</th>
+                                                                                    ))}
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {result[activeTestCaseIdx].output.map((row, rIdx) => (
+                                                                                    <tr key={rIdx} style={{ borderBottom: '1px solid #2a2a2a' }}>
+                                                                                        {Object.values(row).map((v, cIdx) => (
+                                                                                            <td key={cIdx} style={{ padding: '0.4rem 0.6rem', color: !result[activeTestCaseIdx].passed ? '#f87171' : 'inherit' }}>{String(v)}</td>
+                                                                                        ))}
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                ) : (
+                                                                    <pre style={{ margin: 0, padding: '0.5rem', background: '#222', color: '#888', fontStyle: 'italic', fontSize: '0.8rem' }}>Empty Output (0 rows returned)</pre>
+                                                                )}
+                                                            </div>
+
+                                                            {!result[activeTestCaseIdx].passed && result[activeTestCaseIdx].expected && (
+                                                                <div>
+                                                                    <h5 style={{ margin: '0 0 0.4rem 0', color: '#22c55e', fontSize: '0.8rem' }}>Expected Target Output:</h5>
+                                                                    {result[activeTestCaseIdx].expected.length > 0 ? (
+                                                                        <div style={{ overflowX: 'auto' }}>
+                                                                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem', color: '#22c55e' }}>
+                                                                                <thead>
+                                                                                    <tr style={{ background: '#252526', borderBottom: '1px solid #333' }}>
+                                                                                        {Object.keys(result[activeTestCaseIdx].expected[0]).map(k => (
+                                                                                            <th key={k} style={{ padding: '0.4rem 0.6rem', fontWeight: 'bold' }}>{k}</th>
+                                                                                        ))}
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody>
+                                                                                    {result[activeTestCaseIdx].expected.map((row, rIdx) => (
+                                                                                        <tr key={rIdx} style={{ borderBottom: '1px solid #2a2a2a' }}>
+                                                                                            {Object.values(row).map((v, cIdx) => (
+                                                                                                <td key={cIdx} style={{ padding: '0.4rem 0.6rem' }}>{String(v)}</td>
+                                                                                            ))}
+                                                                                        </tr>
+                                                                                    ))}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <pre style={{ margin: 0, padding: '0.5rem', background: '#222', color: '#22c55e', fontStyle: 'italic', fontSize: '0.8rem' }}>Empty Target Output expected</pre>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {!isPublicMode && (
+                                                        <div style={{ color: '#888', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                                                            Evaluation run against hidden test case. Outputs are hidden to prevent script matching.
+                                                        </div>
+                                                    )}
+
+                                                    {result[activeTestCaseIdx].error && (
+                                                        <div style={{ color: '#f87171', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                                                            Execution error: {result[activeTestCaseIdx].error}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {!error && !result && (
+                                        <div style={{ color: '#777777', fontSize: '0.85rem', fontStyle: 'italic', textAlign: 'center', paddingTop: '1.5rem' }}>
+                                            Console ready. Click "Run Code" or "Evaluate Hidden" to view test outputs here.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Console / Workspace Action Footer */}
+                        <div style={{ 
+                            height: '50px', 
+                            background: '#222222', 
+                            borderTop: '1px solid #2d2d2d', 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center', 
+                            padding: '0 1rem' 
+                        }}>
+                            <div>
+                                <button 
+                                    onClick={async () => {
+                                        if (!exam?._id || !user?.id) return alert('Session error');
+                                        const res = await fetch(`${API_BASE_URL}/api/attempts/start`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ student: user.id, exam: exam._id })
+                                        });
+                                        const attemptData = await res.json();
+                                        await fetch(`${API_BASE_URL}/api/attempts/${attemptData._id}/save-query`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ query })
+                                        });
+                                        alert('Query saved!');
+                                    }}
+                                    className="action-btn" 
+                                    style={{ background: '#3b82f6', color: 'white' }}
+                                >
+                                    <Save size={14} /> Save Draft
+                                </button>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '0.6rem' }}>
+                                <button 
+                                    onClick={() => {
+                                        handleRunPatternMatch(true);
+                                        setActiveConsoleTab('result');
+                                    }}
+                                    className="action-btn" 
+                                    style={{ background: '#333333', color: '#ffffff', border: '1px solid #444' }}
+                                >
+                                    <Play size={12} /> Run Code (Debug)
+                                </button>
+                                
+                                <button 
+                                    onClick={() => {
+                                        handleRunPatternMatch(false);
+                                        setActiveConsoleTab('result');
+                                    }}
+                                    className="action-btn" 
+                                    style={{ background: '#0e7490', color: '#ffffff' }}
+                                >
+                                    <Server size={12} /> Evaluate Hidden
+                                </button>
+
+                                <button 
+                                    onClick={() => handleSubmitAttempt()}
+                                    disabled={!result}
+                                    className="action-btn" 
+                                    style={{ background: result ? '#16a34a' : '#27272a', color: result ? 'white' : '#71717a' }}
+                                >
+                                    <Check size={14} /> Submit Answer
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
