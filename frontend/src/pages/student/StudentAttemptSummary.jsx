@@ -37,9 +37,7 @@ const StudentAttemptSummary = () => {
   if (!exam) return <div className="moodle-container" style={{ textAlign: 'center', marginTop: '4rem' }}>Exam not found.</div>;
 
   const calculateGrade = (att) => {
-    // Priority 1: Use attempt.maxScore (saved at start time)
-    // Priority 2: Use current exam length
-    const max = att.maxScore || exam.questions?.length || 1;
+    const max = (att.maxScore && att.maxScore > 1) ? att.maxScore : (exam.questions?.reduce((sum, q) => sum + (q.marks || (q.type === 'SQL' ? 100 : 1)), 0) || 1);
     const grade = (att.score / max) * 100;
     return Math.min(grade, 100).toFixed(2); // Cap at 100%
   };
@@ -82,7 +80,7 @@ const StudentAttemptSummary = () => {
           </thead>
           <tbody>
             {attempts.map((attempt, idx) => {
-              const max = attempt.maxScore || exam.questions?.length || 1;
+              const max = (attempt.maxScore && attempt.maxScore > 1) ? attempt.maxScore : (exam.questions?.reduce((sum, q) => sum + (q.marks || (q.type === 'SQL' ? 100 : 1)), 0) || 1);
               return (
                 <tr key={attempt._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                   <td style={{ textAlign: 'center', fontWeight: 'bold', padding: '1.25rem' }}>{idx + 1}</td>

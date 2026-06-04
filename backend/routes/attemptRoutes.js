@@ -111,7 +111,7 @@ router.post('/start', requireAuth, async (req, res) => {
 
         const Exam = require('../models/Exam');
         const examData = await Exam.findById(exam);
-        const maxScore = examData?.questions?.length || 0;
+        const maxScore = examData?.questions?.reduce((sum, q) => sum + (q.marks || (q.type === 'SQL' ? 100 : 1)), 0) || 0;
 
         const ip = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
         const attempt = new Attempt({ ...req.body, status: 'attempting', ipAddress: ip, maxScore });

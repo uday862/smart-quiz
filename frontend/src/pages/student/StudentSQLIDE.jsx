@@ -878,7 +878,7 @@ const StudentSQLIDE = () => {
                                 <span>Code Editor (MySQL Syntax)</span>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#a0a0a0', fontSize: '0.8rem', cursor: 'pointer' }}>
                                     <input 
                                         type="checkbox" 
@@ -904,6 +904,56 @@ const StudentSQLIDE = () => {
                                         Clear Code
                                     </button>
                                 )}
+                                <span style={{ color: '#444' }}>|</span>
+                                <button 
+                                    onClick={async () => {
+                                        if (!exam?._id || !user?.id) return alert('Session error');
+                                        const res = await fetch(`${API_BASE_URL}/api/attempts/start`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ student: user.id, exam: exam._id })
+                                        });
+                                        const attemptData = await res.json();
+                                        await fetch(`${API_BASE_URL}/api/attempts/${attemptData._id}/save-query`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ query })
+                                        });
+                                        alert('Query saved!');
+                                    }}
+                                    className="action-btn" 
+                                    style={{ background: '#3b82f6', color: 'white', padding: '0.25rem 0.6rem', fontSize: '0.75rem', height: '26px' }}
+                                >
+                                    <Save size={12} /> Save Draft
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        handleRunPatternMatch(true);
+                                        setActiveConsoleTab('result');
+                                    }}
+                                    className="action-btn" 
+                                    style={{ background: '#333333', color: '#ffffff', border: '1px solid #444', padding: '0.25rem 0.6rem', fontSize: '0.75rem', height: '26px' }}
+                                >
+                                    <Play size={10} /> Run Code
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        handleRunPatternMatch(false);
+                                        setActiveConsoleTab('result');
+                                    }}
+                                    className="action-btn" 
+                                    style={{ background: '#0e7490', color: '#ffffff', padding: '0.25rem 0.6rem', fontSize: '0.75rem', height: '26px' }}
+                                >
+                                    <Server size={10} /> Evaluate Hidden
+                                </button>
+                                <button 
+                                    onClick={() => handleSubmitAttempt()}
+                                    disabled={!result}
+                                    className="action-btn" 
+                                    style={{ background: result ? '#16a34a' : '#27272a', color: result ? 'white' : '#71717a', padding: '0.25rem 0.6rem', fontSize: '0.75rem', height: '26px' }}
+                                >
+                                    <Check size={12} /> Submit
+                                </button>
                             </div>
                         </div>
 
@@ -1164,73 +1214,7 @@ const StudentSQLIDE = () => {
                             )}
                         </div>
 
-                        {/* Console / Workspace Action Footer */}
-                        <div style={{ 
-                            height: '50px', 
-                            background: '#222222', 
-                            borderTop: '1px solid #2d2d2d', 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center', 
-                            padding: '0 1rem' 
-                        }}>
-                            <div>
-                                <button 
-                                    onClick={async () => {
-                                        if (!exam?._id || !user?.id) return alert('Session error');
-                                        const res = await fetch(`${API_BASE_URL}/api/attempts/start`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ student: user.id, exam: exam._id })
-                                        });
-                                        const attemptData = await res.json();
-                                        await fetch(`${API_BASE_URL}/api/attempts/${attemptData._id}/save-query`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ query })
-                                        });
-                                        alert('Query saved!');
-                                    }}
-                                    className="action-btn" 
-                                    style={{ background: '#3b82f6', color: 'white' }}
-                                >
-                                    <Save size={14} /> Save Draft
-                                </button>
-                            </div>
 
-                            <div style={{ display: 'flex', gap: '0.6rem' }}>
-                                <button 
-                                    onClick={() => {
-                                        handleRunPatternMatch(true);
-                                        setActiveConsoleTab('result');
-                                    }}
-                                    className="action-btn" 
-                                    style={{ background: '#333333', color: '#ffffff', border: '1px solid #444' }}
-                                >
-                                    <Play size={12} /> Run Code (Debug)
-                                </button>
-                                
-                                <button 
-                                    onClick={() => {
-                                        handleRunPatternMatch(false);
-                                        setActiveConsoleTab('result');
-                                    }}
-                                    className="action-btn" 
-                                    style={{ background: '#0e7490', color: '#ffffff' }}
-                                >
-                                    <Server size={12} /> Evaluate Hidden
-                                </button>
-
-                                <button 
-                                    onClick={() => handleSubmitAttempt()}
-                                    disabled={!result}
-                                    className="action-btn" 
-                                    style={{ background: result ? '#16a34a' : '#27272a', color: result ? 'white' : '#71717a' }}
-                                >
-                                    <Check size={14} /> Submit Answer
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
