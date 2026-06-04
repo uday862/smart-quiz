@@ -167,49 +167,51 @@ router.put('/:id/submit', requireAuth, async (req, res) => {
         
         let finalScore = serverScore;
         
-        // Server-side SQL validation for SQL questions (FIXED ASYNC & IN-MEMORY)
+        // Server-side SQL validation for SQL questions using ALASQL (bypasses sqlite3 native binary issues)
         if (attempt.exam?.questions?.[0]?.type === 'SQL' && answers?.[0]?.answer) {
-            const sqlite3 = require('sqlite3').verbose();
-            const util = require('util');
-            
             try {
+                const alasql = require('alasql');
                 const q = attempt.exam.questions[0];
                 const testCases = q.test_cases || [];
                 const userQuery = answers[0].answer.trim();
                 let passed = 0;
                 
-                for (const tc of testCases) {
+                for (let i = 0; i < testCases.length; i++) {
+                    const tc = testCases[i];
                     if (!tc.input || !tc.output) continue;
                     
-                    let db;
+                    const tempDb = `db_exec_${Date.now()}_${i}`;
                     try {
-                        db = new sqlite3.Database(':memory:');
-                        const execAsync = util.promisify(db.exec.bind(db));
-                        const allAsync = util.promisify(db.all.bind(db));
+                        alasql(`CREATE DATABASE ${tempDb}`);
+                        alasql(`USE ${tempDb}`);
                         
                         // Load test data
-                        await execAsync(tc.input);
+                        alasql(tc.input);
                         
                         // Execute user query
-                        const rows = await allAsync(userQuery);
+                        const userOutput = alasql(userQuery);
                         
-                        const userOutputStr = JSON.stringify(rows.sort((a,b) => {
-                            const sa = JSON.stringify(a), sb = JSON.stringify(b);
-                            return sa > sb ? 1 : sa < sb ? -1 : 0;
-                        }));
-                        const expectedStr = tc.output.trim();
+                        // Parse expected output
+                        let truthOutput;
+                        const adminAns = (tc.output || '').trim();
+                        if (adminAns.startsWith('[')) {
+                            truthOutput = JSON.parse(adminAns);
+                        } else {
+                            truthOutput = alasql(adminAns);
+                        }
                         
-                        if (userOutputStr === expectedStr) passed++;
+                        const userStr = userOutput !== undefined ? JSON.stringify(userOutput) : 'null';
+                        const truthStr = truthOutput !== undefined ? JSON.stringify(truthOutput) : 'null';
+                        
+                        if (userStr === truthStr && userStr !== 'null') {
+                            passed++;
+                        }
                     } catch (tcErr) {
                         console.error(`Test case failed:`, tcErr.message);
                     } finally {
-                        if (db) {
-                            try {
-                                db.close();
-                            } catch (closeErr) {
-                                console.error('Failed to close temporary in-memory db:', closeErr.message);
-                            }
-                        }
+                        try {
+                            alasql(`DROP DATABASE IF EXISTS ${tempDb}`);
+                        } catch (dropErr) {}
                     }
                 }
                 
