@@ -102,7 +102,7 @@ const StudentAttemptSummary = () => {
           </tbody>
         </table>
 
-        {attempts.length < (exam.attempt_limit || 1) && (
+        {true && (
            <div style={{ marginTop: '3rem', textAlign: 'center' }}>
               <button 
                 className="btn btn-primary" 

@@ -88,6 +88,25 @@ const StudentSQLIDE = () => {
     const [autoBrackets, setAutoBrackets] = useState(true);
     const [activeTestCaseIdx, setActiveTestCaseIdx] = useState(0);
 
+    const [saveStatus, setSaveStatus] = useState('saved'); // 'saved', 'saving', 'unsaved'
+    const isInitializedRef = useRef(false);
+
+    useEffect(() => {
+        if (!loading && exam) {
+            const timer = setTimeout(() => {
+                isInitializedRef.current = true;
+                setSaveStatus('saved');
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [loading, exam]);
+
+    useEffect(() => {
+        if (isInitializedRef.current) {
+            setSaveStatus('unsaved');
+        }
+    }, [query]);
+
     const lineNumbersRef = useRef(null);
     const textareaRef = useRef(null);
 
@@ -240,10 +259,6 @@ const StudentSQLIDE = () => {
                     if (attemptRes.ok) {
                         const pastAttempts = await attemptRes.json();
                         const completedAttempts = pastAttempts.filter(a => a.status === 'completed');
-                        if (completedAttempts.length >= (found.attempt_limit || 1)) {
-                            navigate(`/student/summary/${found._id}`);
-                            return;
-                        }
                         if (completedAttempts.length > 0) {
                             completedAttempts.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
                             setLatestScore(completedAttempts[0].score || 0);
@@ -472,7 +487,6 @@ const StudentSQLIDE = () => {
             if (res.ok) {
                 const finalAttempt = await res.json();
                 localStorage.removeItem(`timeLeft_${exam._id}`);
-                alert(`Successfully saved to database! Server Validated Score: ${finalAttempt.score}/100`);
                 setLatestScore(finalAttempt.score);
                 setSubmitted(true);
                 if (document.fullscreenElement) {
@@ -480,10 +494,10 @@ const StudentSQLIDE = () => {
                 }
                 navigate('/student');
             } else {
-                alert('An error occurred updating the database submission record.');
+                console.error('An error occurred updating the database submission record.');
             }
         } catch (err) {
-            alert(`Fatal Network Error submitting: ${err.message}`);
+            console.error('Fatal Network Error submitting:', err.message);
         } finally {
             setSubmitting(false);
         }
@@ -908,23 +922,44 @@ const StudentSQLIDE = () => {
                                 <button 
                                     onClick={async () => {
                                         if (!exam?._id || !user?.id) return alert('Session error');
-                                        const res = await fetch(`${API_BASE_URL}/api/attempts/start`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ student: user.id, exam: exam._id })
-                                        });
-                                        const attemptData = await res.json();
-                                        await fetch(`${API_BASE_URL}/api/attempts/${attemptData._id}/save-query`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ query })
-                                        });
-                                        alert('Query saved!');
+                                        setSaveStatus('saving');
+                                        try {
+                                            const res = await fetch(`${API_BASE_URL}/api/attempts/start`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ student: user.id, exam: exam._id })
+                                            });
+                                            const attemptData = await res.json();
+                                            await fetch(`${API_BASE_URL}/api/attempts/${attemptData._id}/save-query`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ query })
+                                            });
+                                            setSaveStatus('saved');
+                                        } catch (e) {
+                                            setSaveStatus('unsaved');
+                                            console.error('Save query draft failed', e);
+                                        }
                                     }}
+                                    disabled={saveStatus === 'saved' || saveStatus === 'saving'}
                                     className="action-btn" 
-                                    style={{ background: '#3b82f6', color: 'white', padding: '0.25rem 0.6rem', fontSize: '0.75rem', height: '26px' }}
+                                    style={{ 
+                                        background: saveStatus === 'saved' ? '#16a34a' : '#3b82f6', 
+                                        color: 'white', 
+                                        padding: '0.25rem 0.6rem', 
+                                        fontSize: '0.75rem', 
+                                        height: '26px',
+                                        opacity: (saveStatus === 'saved' || saveStatus === 'saving') ? 0.75 : 1,
+                                        cursor: (saveStatus === 'saved' || saveStatus === 'saving') ? 'not-allowed' : 'pointer'
+                                    }}
                                 >
-                                    <Save size={12} /> Save Draft
+                                    {saveStatus === 'saving' ? (
+                                        <>Saving...</>
+                                    ) : saveStatus === 'saved' ? (
+                                        <><Check size={12} /> Saved</>
+                                    ) : (
+                                        <><Save size={12} /> Save Draft</>
+                                    )}
                                 </button>
                                 <button 
                                     onClick={() => {

@@ -193,11 +193,6 @@ const StudentQuizMode = () => {
             return;
           }
           
-          if (pastAttempts.length >= (found.attempt_limit || 1)) {
-            navigate(`/student/summary/${found._id}`);
-            return;
-          }
-          
           setExam(found);
           window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: found.fullWindow } }));
 

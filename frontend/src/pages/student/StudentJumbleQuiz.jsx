@@ -407,9 +407,6 @@ const StudentJumbleQuiz = () => {
 
         const attRes = await fetch(`${API_BASE_URL}/api/attempts/exam/${found._id}/student/${activeUser.id}`);
         const past = await attRes.json();
-        if (past.length >= (found.attempt_limit || 1)) {
-          navigate(`/student/summary/${found._id}`); return;
-        }
 
         setExam(found);
         window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: found.fullWindow } }));
