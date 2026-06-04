@@ -7,17 +7,21 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 router.post('/:id/save-query', requireAuth, async (req, res) => {
     try {
         const { query } = req.body;
-        const attempt = await Attempt.findById(req.params.id);
+        const attempt = await Attempt.findById(req.params.id).populate('exam');
         if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
 
         if (req.user.role !== 'admin' && String(attempt.student) !== String(req.user.id)) {
             return res.status(403).json({ message: 'Access denied' });
         }
         
+        const questionId = attempt.exam?.questions?.[0]?._id;
+        
         if (attempt.answers && attempt.answers.length > 0) {
             attempt.answers[0].answer = query;
+        } else if (questionId) {
+            attempt.answers = [{ question_id: questionId, answer: query }];
         } else {
-            attempt.answers = [{ question_id: attempt.exam.questions[0]._id, answer: query }];
+            return res.status(400).json({ message: 'Exam questions not found' });
         }
         
         await attempt.save();
@@ -163,15 +167,10 @@ router.put('/:id/submit', requireAuth, async (req, res) => {
         
         let finalScore = serverScore;
         
-        // Server-side SQL validation for SQL questions (FIXED ASYNC)
+        // Server-side SQL validation for SQL questions (FIXED ASYNC & IN-MEMORY)
         if (attempt.exam?.questions?.[0]?.type === 'SQL' && answers?.[0]?.answer) {
             const sqlite3 = require('sqlite3').verbose();
-            const fs = require('fs');
-            const path = require('path');
             const util = require('util');
-            const tmpDir = path.join(__dirname, '..', 'tmp');
-            if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
-            const dbPath = path.join(tmpDir, `sql_test_${Date.now()}.db`);
             
             try {
                 const q = attempt.exam.questions[0];
@@ -179,15 +178,14 @@ router.put('/:id/submit', requireAuth, async (req, res) => {
                 const userQuery = answers[0].answer.trim();
                 let passed = 0;
                 
-                const db = new sqlite3.Database(dbPath);
-                const execAsync = util.promisify(db.exec.bind(db));
-                const allAsync = util.promisify(db.all.bind(db));
-                
                 for (const tc of testCases) {
                     if (!tc.input || !tc.output) continue;
                     
+                    let db;
                     try {
-                        await execAsync('BEGIN TRANSACTION');
+                        db = new sqlite3.Database(':memory:');
+                        const execAsync = util.promisify(db.exec.bind(db));
+                        const allAsync = util.promisify(db.all.bind(db));
                         
                         // Load test data
                         await execAsync(tc.input);
@@ -202,14 +200,18 @@ router.put('/:id/submit', requireAuth, async (req, res) => {
                         const expectedStr = tc.output.trim();
                         
                         if (userOutputStr === expectedStr) passed++;
-                        
-                        await execAsync('ROLLBACK');
                     } catch (tcErr) {
                         console.error(`Test case failed:`, tcErr.message);
+                    } finally {
+                        if (db) {
+                            try {
+                                db.close();
+                            } catch (closeErr) {
+                                console.error('Failed to close temporary in-memory db:', closeErr.message);
+                            }
+                        }
                     }
                 }
-                
-                db.close();
                 
                 const questionMarks = q.marks || 100;
                 finalScore = testCases.length > 0 ? Math.round((passed / testCases.length) * questionMarks) : 0;
@@ -228,12 +230,6 @@ router.put('/:id/submit', requireAuth, async (req, res) => {
             } catch (sqlErr) {
                 console.error('SQL validation error:', sqlErr);
                 finalScore = 0;
-            } finally {
-                try {
-                    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-                } catch (unlinkErr) {
-                    console.error('Failed to delete temp db:', unlinkErr.message);
-                }
             }
         }
         

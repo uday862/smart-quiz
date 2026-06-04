@@ -17,7 +17,8 @@ const attemptSchema = new mongoose.Schema({
     answers: [{
         question_id: { type: mongoose.Schema.Types.ObjectId },
         answer: { type: mongoose.Schema.Types.Mixed }, // String for MCQ, code, etc.
-        marks_awarded: { type: Number, default: 0 }
+        marks_awarded: { type: Number, default: 0 },
+        server_validation: { type: mongoose.Schema.Types.Mixed }
     }]
 }, { timestamps: true });
 
