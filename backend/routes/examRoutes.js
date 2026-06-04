@@ -51,9 +51,6 @@ router.get('/', requireAuth, async (req, res) => {
         accessible.forEach(exam => {
             (exam.questions || []).forEach(q => {
                 delete q.correct_answer;
-                if (q.test_cases && q.test_cases.length > 1) {
-                    q.test_cases = [q.test_cases[0]];
-                }
             });
         });
 
@@ -71,9 +68,6 @@ router.get('/resource-hub/all', requireAuth, async (req, res) => {
             resources.forEach(exam => {
                 (exam.questions || []).forEach(q => {
                     delete q.correct_answer;
-                    if (q.test_cases && q.test_cases.length > 1) {
-                        q.test_cases = [q.test_cases[0]];
-                    }
                 });
             });
         }
@@ -112,9 +106,6 @@ router.get('/:id', requireAuth, async (req, res) => {
 
             (exam.questions || []).forEach(q => {
                 delete q.correct_answer;
-                if (q.test_cases && q.test_cases.length > 1) {
-                    q.test_cases = [q.test_cases[0]];
-                }
             });
         }
         res.json(exam);

@@ -46,9 +46,6 @@ router.get('/:id', requireAuth, async (req, res) => {
             if (attempt.exam && attempt.exam.questions) {
                 attempt.exam.questions.forEach(q => {
                     delete q.correct_answer;
-                    if (q.test_cases && q.test_cases.length > 1) {
-                        q.test_cases = [q.test_cases[0]];
-                    }
                 });
             }
         }
@@ -307,9 +304,6 @@ router.get('/student/:studentId', requireAuth, async (req, res) => {
                 if (att.exam && att.exam.questions) {
                     att.exam.questions.forEach(q => {
                         delete q.correct_answer;
-                        if (q.test_cases && q.test_cases.length > 1) {
-                            q.test_cases = [q.test_cases[0]];
-                        }
                     });
                 }
             });

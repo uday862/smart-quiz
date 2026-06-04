@@ -30,9 +30,6 @@ router.get('/', requireAuth, async (req, res) => {
                 tasks.forEach(t => {
                     (t.questions || []).forEach(q => {
                         delete q.correct_answer;
-                        if (q.test_cases && q.test_cases.length > 1) {
-                            q.test_cases = [q.test_cases[0]];
-                        }
                     });
                 });
             }
