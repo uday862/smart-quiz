@@ -197,47 +197,45 @@ const StudentLayout = (props) => {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {!hideLayout && (
-        <nav key="nav" style={{ background: '#071125', color: 'white', padding: '0.85rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.25)', position: 'sticky', top: 0, zIndex: 1000 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-            <div style={{ background: 'white', padding: '0.3rem 0.7rem', borderRadius: '4px' }}>
-              <span style={{ color: '#000', fontWeight: '900', fontStyle: 'italic', fontSize: '1.2rem' }}>SMART QUIZ</span>
-            </div>
-            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-              <Link to="/student" {...navLink('/student', 'Dashboard')}>Dashboard</Link>
-              <Link to="/student/assignments" {...navLink('/student/assignments', 'Assignments')}>Assignments</Link>
-              <Link to="/student/completed" {...navLink('/student/completed', 'Completed Tasks')}>Completed</Link>
-              <Link to="/student/reports" {...navLink('/student/reports', 'Reports')}>Reports</Link>
-              <Link to="/student/profile" {...navLink('/student/profile', 'Profile')}>Profile</Link>
-              <button onClick={() => setShowFeedback(true)} style={{ background: 'none', border: 'none', color: '#f36d44', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>Give Feedback</button>
-            </div>
+      <nav style={{ display: hideLayout ? 'none' : 'flex', background: '#071125', color: 'white', padding: '0.85rem 2rem', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.25)', position: 'sticky', top: 0, zIndex: 1000 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+          <div style={{ background: 'white', padding: '0.3rem 0.7rem', borderRadius: '4px' }}>
+            <span style={{ color: '#000', fontWeight: '900', fontStyle: 'italic', fontSize: '1.2rem' }}>SMART QUIZ</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-            {user && <NotificationBell userId={user.id} />}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: user?.avatar_color || '#f36d44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '0.75rem', color: 'white' }}>
-                {user?.name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '??'}
-              </div>
-              <span style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.8)', fontWeight: '600' }}>{user?.name}</span>
-            </div>
-            <button
-              onClick={() => logout()}
-              style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', padding: '0.3rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700' }}
-            >
-              Log out
-            </button>
+          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+            <Link to="/student" {...navLink('/student', 'Dashboard')}>Dashboard</Link>
+            <Link to="/student/assignments" {...navLink('/student/assignments', 'Assignments')}>Assignments</Link>
+            <Link to="/student/completed" {...navLink('/student/completed', 'Completed Tasks')}>Completed</Link>
+            <Link to="/student/reports" {...navLink('/student/reports', 'Reports')}>Reports</Link>
+            <Link to="/student/profile" {...navLink('/student/profile', 'Profile')}>Profile</Link>
+            <button onClick={() => setShowFeedback(true)} style={{ background: 'none', border: 'none', color: '#f36d44', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>Give Feedback</button>
           </div>
-        </nav>
-      )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+          {user && <NotificationBell userId={user.id} />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: user?.avatar_color || '#f36d44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '0.75rem', color: 'white' }}>
+              {user?.name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '??'}
+            </div>
+            <span style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.8)', fontWeight: '600' }}>{user?.name}</span>
+          </div>
+          <button
+            onClick={() => logout()}
+            style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', padding: '0.3rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700' }}
+          >
+            Log out
+          </button>
+        </div>
+      </nav>
       
-      {!hideLayout && news && (
-        <div key="news" style={{ background: '#1e3a8a', color: 'white', padding: '0.4rem 0', fontSize: '0.85rem', fontWeight: 'bold', display: 'flex' }}>
+      {news && (
+        <div style={{ display: hideLayout ? 'none' : 'flex', background: '#1e3a8a', color: 'white', padding: '0.4rem 0', fontSize: '0.85rem', fontWeight: 'bold' }}>
           <marquee scrollamount="6">{news}</marquee>
         </div>
       )}
 
       {!hideLayout && showFeedback && (
-        <div key="feedback" className="modal-overlay">
+        <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '400px' }}>
             <h3 style={{ margin: '0 0 1rem 0' }}>Submit Feedback</h3>
             <form onSubmit={handleFeedbackSubmit}>
@@ -251,11 +249,15 @@ const StudentLayout = (props) => {
         </div>
       )}
 
-      <main key="main" style={{ flex: 1, background: 'var(--bg-color)' }}>
+      <main style={{ flex: 1, background: 'var(--bg-color)' }}>
         {props.children}
       </main>
       
-      {!hideLayout && user && <SimpleChatbot key="chatbot" userId={user.id} />}
+      {user && (
+        <div style={{ display: hideLayout ? 'none' : 'block' }}>
+          <SimpleChatbot userId={user.id} />
+        </div>
+      )}
     </div>
   );
 };
