@@ -104,6 +104,8 @@ const StudentSQLIDE = () => {
     useEffect(() => {
         if (isInitializedRef.current) {
             setSaveStatus('unsaved');
+            setResult(null);
+            setIsPassed(0);
         }
     }, [query]);
 
@@ -471,13 +473,17 @@ const StudentSQLIDE = () => {
                 targetAttemptId = attemptData._id;
             }
 
+            const got100 = isPassed === 100;
+            const isForced = !!options?.forceSpam || !!options?.forceComplete || (timeLeft !== null && timeLeft <= 0);
+            const newStatus = (got100 || isForced) ? 'completed' : 'attempting';
+
             // Step 2: Submit Completion
             const res = await fetch(`${API_BASE_URL}/api/attempts/${targetAttemptId}/submit`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     score: isPassed, 
-                    status: 'completed',
+                    status: newStatus,
                     answers: [{ question_id: exam.questions[0]._id, answer: query }],
                     flags: flagsRef.current,
                     spam: !!options?.forceSpam
@@ -486,13 +492,19 @@ const StudentSQLIDE = () => {
 
             if (res.ok) {
                 const finalAttempt = await res.json();
-                localStorage.removeItem(`timeLeft_${exam._id}`);
                 setLatestScore(finalAttempt.score);
-                setSubmitted(true);
-                if (document.fullscreenElement) {
-                    document.exitFullscreen().catch(err => console.error("Exit fullscreen error", err));
+                if (newStatus === 'completed') {
+                    localStorage.removeItem(`timeLeft_${exam._id}`);
+                    setSubmitted(true);
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen().catch(err => console.error("Exit fullscreen error", err));
+                    }
+                    if (!got100) {
+                        navigate('/student');
+                    }
+                } else {
+                    alert(`Marks updated in database. Your score is ${finalAttempt.score}/100. Keep trying to get 100!`);
                 }
-                navigate('/student');
             } else {
                 console.error('An error occurred updating the database submission record.');
             }
@@ -686,6 +698,44 @@ const StudentSQLIDE = () => {
                   <div style={{ display: 'inline-block', width: '50px', height: '50px', border: '5px solid #7c3aed', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1.5rem' }} />
                   <h2 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'white', marginBottom: '0.5rem' }}>Grading Your Answers</h2>
                   <p style={{ color: '#c4b5fd', fontSize: '1rem' }}>Evaluating code and compiling scores, please do not close this window...</p>
+                </div>
+              </div>
+            )}
+
+            {submitted && isPassed === 100 && (
+              <div style={{
+                position: 'fixed', inset: 0, background: 'rgba(7, 17, 37, 0.98)',
+                zIndex: 11000, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', color: 'white'
+              }}>
+                <div style={{ background: '#1e293b', padding: '2.5rem', borderRadius: '12px', textAlign: 'center', maxWidth: '480px', border: '2px solid #22c55e' }}>
+                  <span style={{ fontSize: '3.5rem', display: 'block', marginBottom: '1rem' }}>🏆</span>
+                  <h2 style={{ fontSize: '1.6rem', fontWeight: '900', marginBottom: '1rem', color: '#22c55e' }}>Perfect Score!</h2>
+                  <p style={{ color: '#94a3b8', lineHeight: '1.6', marginBottom: '1.75rem' }}>
+                    Congratulations! You have completed the exam with a score of 100/100.
+                  </p>
+                  <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                    <button
+                      onClick={() => navigate(`/student/review/${activeAttemptId}`)}
+                      style={{
+                        background: '#3b82f6', color: 'white', padding: '0.85rem 2rem',
+                        border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: '900',
+                        cursor: 'pointer', boxShadow: '0 4px 14px rgba(59,130,246,0.4)'
+                      }}
+                    >
+                      Review
+                    </button>
+                    <button
+                      onClick={() => navigate('/student')}
+                      style={{
+                        background: '#64748b', color: 'white', padding: '0.85rem 2rem',
+                        border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: '900',
+                        cursor: 'pointer', boxShadow: '0 4px 14px rgba(100,116,139,0.4)'
+                      }}
+                    >
+                      Exit
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
