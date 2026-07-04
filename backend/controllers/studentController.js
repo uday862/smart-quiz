@@ -218,21 +218,12 @@ exports.emailStudents = async (req, res) => {
             return res.status(404).json({ message: 'No matching students with email addresses found' });
         }
 
-        const hasSMTP = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
-        if (!hasSMTP) {
-            return res.status(400).json({ message: 'SMTP is not configured on the server. Cannot send email.' });
+        const hasMailer = process.env.RESEND_API_KEY || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+        if (!hasMailer) {
+            return res.status(400).json({ message: 'Neither Resend API Key nor SMTP configurations are set.' });
         }
 
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT || '587'),
-            secure: String(process.env.SMTP_PORT || '').trim() === '465',
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS
-            }
-        });
-
+        const { sendEmail } = require('../utils/mailer');
         let successCount = 0;
         let failCount = 0;
         const errors = [];
@@ -240,8 +231,7 @@ exports.emailStudents = async (req, res) => {
         // Send to each student
         for (const student of students) {
             try {
-                const mailOptions = {
-                    from: process.env.SMTP_FROM || `"Smart Quiz Admin" <${process.env.SMTP_USER}>`,
+                await sendEmail({
                     to: student.email,
                     subject: subject,
                     text: message,
@@ -254,9 +244,7 @@ exports.emailStudents = async (req, res) => {
                         <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
                         <p style="font-size: 11px; color: #94a3b8;">This is a broadcast message sent by your administrator.</p>
                     </div>`
-                };
-
-                await transporter.sendMail(mailOptions);
+                });
                 successCount++;
             } catch (err) {
                 console.error(`Failed to send email to ${student.email}:`, err.message);

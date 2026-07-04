@@ -145,22 +145,12 @@ exports.forgotPassword = async (req, res) => {
 
         console.log(`[PASSWORD RESET] OTP generated for ${email}: ${otp}`);
 
-        // Try sending email via SMTP if configured
-        const hasSMTP = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
-        if (hasSMTP) {
+        // Try sending email via SMTP or Resend
+        const hasMailer = process.env.RESEND_API_KEY || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+        if (hasMailer) {
             try {
-                const transporter = nodemailer.createTransport({
-                    host: process.env.SMTP_HOST,
-                    port: parseInt(process.env.SMTP_PORT || '587'),
-                    secure: String(process.env.SMTP_PORT || '').trim() === '465',
-                    auth: {
-                        user: process.env.SMTP_USER,
-                        pass: process.env.SMTP_PASS
-                    }
-                });
-
-                const mailOptions = {
-                    from: process.env.SMTP_FROM || `"Smart Quiz Admin" <${process.env.SMTP_USER}>`,
+                const { sendEmail } = require('../utils/mailer');
+                await sendEmail({
                     to: email,
                     subject: 'Smart Quiz Password Reset OTP',
                     text: `You requested a password reset for your Smart Quiz account.\n\nYour One-Time Password (OTP) is: ${otp}\n\nThis OTP is valid for 10 minutes. If you did not request this, please ignore this email.`,
@@ -173,20 +163,18 @@ exports.forgotPassword = async (req, res) => {
                         </div>
                         <p style="font-size: 12px; color: #6b7280;">This OTP will expire in 10 minutes. If you did not request this password reset, please ignore this email or contact the admin.</p>
                     </div>`
-                };
-
-                await transporter.sendMail(mailOptions);
+                });
                 return res.json({ message: 'An OTP has been sent to your email address.' });
-            } catch (smtpErr) {
-                console.error('[SMTP ERROR] Failed to send email via SMTP:', smtpErr.message || smtpErr);
+            } catch (mailErr) {
+                console.error('[MAIL ERROR] Failed to send email:', mailErr.message || mailErr);
                 return res.json({ 
-                    message: 'An OTP has been sent to your email address (Development Mode Fallback: Check server terminal for OTP).' 
+                    message: 'An OTP has been generated (Fallback: Check server terminal for OTP).' 
                 });
             }
         } else {
-            // SMTP fallback: return successfully but log to terminal.
+            // Fallback: return successfully but log to terminal.
             return res.json({ 
-                message: 'An OTP has been sent to your email address (Development Mode: Check server terminal for OTP).' 
+                message: 'An OTP has been generated (Development Mode: Check server terminal for OTP).' 
             });
         }
 
