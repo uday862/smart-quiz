@@ -1423,9 +1423,9 @@ const AdminDashboard = () => {
                               Target: <span style={{ textTransform: 'capitalize', fontWeight: 'bold' }}>{b.targetMode}</span> 
                               {b.targetNames && b.targetNames.length > 0 && ` (${b.targetNames.join(', ')})`}
                             </div>
-                            {b.errors && b.errors.length > 0 && (
+                            {b.deliveryErrors && b.deliveryErrors.length > 0 && (
                               <div style={{ color: '#ef4444', fontSize: '0.7rem', marginTop: '0.3rem', whiteSpace: 'pre-wrap', background: '#fef2f2', padding: '0.3rem', borderRadius: '4px' }}>
-                                ⚠️ Errors: {b.errors.slice(0, 2).join(', ')}{b.errors.length > 2 ? '...' : ''}
+                                ⚠️ Errors: {b.deliveryErrors.slice(0, 2).join(', ')}{b.deliveryErrors.length > 2 ? '...' : ''}
                               </div>
                             )}
                           </td>

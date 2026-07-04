@@ -275,7 +275,7 @@ exports.emailStudents = async (req, res) => {
                 targetNames,
                 successCount,
                 failCount,
-                errors
+                deliveryErrors: errors
             });
         } catch (dbErr) {
             console.error('Failed to log EmailBroadcast to database:', dbErr.message);

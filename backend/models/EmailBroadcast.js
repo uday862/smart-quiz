@@ -8,7 +8,7 @@ const emailBroadcastSchema = new mongoose.Schema({
     targetNames: [{ type: String }], // Names of groups or student roll numbers
     successCount: { type: Number, default: 0 },
     failCount: { type: Number, default: 0 },
-    errors: [{ type: String }]
+    deliveryErrors: [{ type: String }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('EmailBroadcast', emailBroadcastSchema);
