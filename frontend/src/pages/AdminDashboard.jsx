@@ -108,6 +108,15 @@ const AdminDashboard = () => {
   const [tSampleOut, setTSampleOut] = useState('');
   const [tNotes, setTNotes] = useState('');
   const [tFullWindow, setTFullWindow] = useState(false);
+
+  /* ─── Email broadcast states ─── */
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailTargetMode, setEmailTargetMode] = useState('all'); // 'all' | 'groups' | 'students'
+  const [emailTargetGroups, setEmailTargetGroups] = useState([]);
+  const [emailTargetUsers, setEmailTargetUsers] = useState([]);
+  const [emailHistory, setEmailHistory] = useState([]);
   const [tFlagLimit, setTFlagLimit] = useState(10);
 
   /* ─── Student / Profile states ─── */
@@ -213,6 +222,14 @@ const AdminDashboard = () => {
     } catch (err) { console.error(err); }
   };
 
+  const fetchEmailHistory = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/students/email-history`);
+      const data = await res.json();
+      setEmailHistory(Array.isArray(data) ? data : []);
+    } catch (err) { console.error(err); }
+  };
+
   const fetchNews = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/announcements`);
@@ -254,7 +271,7 @@ const AdminDashboard = () => {
   };
 
   const handleGlobalRefresh = () => {
-    fetchStudents(); fetchDays(); fetchReports(); fetchGroups(); fetchAdmins(); fetchNews(); fetchFeedback(); fetchResources(); fetchResourceFolders();
+    fetchStudents(); fetchDays(); fetchReports(); fetchGroups(); fetchAdmins(); fetchNews(); fetchFeedback(); fetchResources(); fetchResourceFolders(); fetchEmailHistory();
   };
 
   useEffect(() => { handleGlobalRefresh(); }, []);
@@ -327,6 +344,7 @@ const AdminDashboard = () => {
     setTTestCases([{ input: '', output: '' }]); setTSampleIn(''); setTSampleOut('');
     setTFullWindow(false);
     setTFlagLimit(10);
+    setTNegativeMarks(0);
     setShowTaskModal(true);
   };
 
@@ -358,23 +376,23 @@ const AdminDashboard = () => {
       const hasMCQ = task.questions.some(q => q.type === 'MCQ');
       if (hasJumble && hasMCQ) {
         setTaskType('Mixed (Quiz + Jumble)');
-        const mcqQs = task.questions.filter(q => q.type === 'MCQ').map(q => ({ q: q.text, options: q.options, ans: q.correct_answer }));
+        const mcqQs = task.questions.filter(q => q.type === 'MCQ').map(q => ({ q: q.text, options: q.options, ans: q.correct_answer, marks: q.marks || 1 }));
         const jumbleQs = task.questions.filter(q => q.type === 'Jumble').map(q => {
           let answer = q.correct_answer; try { answer = JSON.parse(q.correct_answer); } catch (e) {}
-          return { hint: q.text, keywords: q.words || [], answer: Array.isArray(answer) ? answer : [] };
+          return { hint: q.text, keywords: q.words || [], answer: Array.isArray(answer) ? answer : [], marks: q.marks || 1 };
         });
         setTJson(JSON.stringify({ mcq: mcqQs, jumble: jumbleQs }, null, 2));
       } else {
         setTaskType('Jumble (Keywords)');
         const jqs = task.questions.map(q => {
           let answer = q.correct_answer; try { answer = JSON.parse(q.correct_answer); } catch (e) {}
-          return { hint: q.text, keywords: q.words || [], answer: Array.isArray(answer) ? answer : [] };
+          return { hint: q.text, keywords: q.words || [], answer: Array.isArray(answer) ? answer : [], marks: q.marks || 1 };
         });
         setTJson(JSON.stringify(jqs, null, 2));
       }
     } else {
       setTaskType('Quiz (Multiple Choice)');
-      setTJson(JSON.stringify((task.questions || []).map(q => ({ q: q.text, options: q.options, ans: q.correct_answer })), null, 2));
+      setTJson(JSON.stringify((task.questions || []).map(q => ({ q: q.text, options: q.options, ans: q.correct_answer, marks: q.marks || 1 })), null, 2));
     }
     setShowTaskModal(true);
   };
@@ -391,16 +409,16 @@ const AdminDashboard = () => {
         let jParsed;
         try { jParsed = JSON.parse(tJson); } catch (e) { showToast('Invalid JSON', 'error'); return; }
         if (!Array.isArray(jParsed) || jParsed.length === 0) { showToast('Jumble JSON must be a non-empty array', 'error'); return; }
-        questions = jParsed.map(q => ({ type: 'Jumble', text: q.hint || 'Arrange:', words: q.keywords, correct_answer: JSON.stringify(q.answer), marks: q.marks || 1 }));
+        questions = jParsed.map(q => ({ type: 'Jumble', text: q.hint || 'Arrange:', words: q.keywords, correct_answer: JSON.stringify(q.answer), marks: q.marks !== undefined ? Number(q.marks) : 1 }));
       } else if (taskType.includes('Mixed')) {
         let m; try { m = JSON.parse(tJson); } catch (e) { showToast('Invalid JSON', 'error'); return; }
-        const mcqQs = (m.mcq || []).map(q => ({ type: 'MCQ', text: q.q || q.text, options: q.options, correct_answer: q.ans || q.correct_answer, marks: 1 }));
-        const jumbleQs = (m.jumble || []).map(q => ({ type: 'Jumble', text: q.hint || 'Arrange:', words: q.keywords || [], correct_answer: JSON.stringify(q.answer || []), marks: q.marks || 1 }));
+        const mcqQs = (m.mcq || []).map(q => ({ type: 'MCQ', text: q.q || q.text, options: q.options, correct_answer: q.ans || q.correct_answer, marks: q.marks !== undefined ? Number(q.marks) : 1 }));
+        const jumbleQs = (m.jumble || []).map(q => ({ type: 'Jumble', text: q.hint || 'Arrange:', words: q.keywords || [], correct_answer: JSON.stringify(q.answer || []), marks: q.marks !== undefined ? Number(q.marks) : 1 }));
         questions = [...mcqQs, ...jumbleQs];
       } else {
         const parsed = JSON.parse(tJson);
         const qArray = Array.isArray(parsed) ? parsed : [parsed];
-        questions = qArray.map(q => ({ type: 'MCQ', text: q.q || q.text, options: q.options, correct_answer: q.ans || q.correct_answer, marks: 1 }));
+        questions = qArray.map(q => ({ type: 'MCQ', text: q.q || q.text, options: q.options, correct_answer: q.ans || q.correct_answer, marks: q.marks !== undefined ? Number(q.marks) : 1 }));
       }
 
       const allowedUsers = tAssignMode === 'students' ? tAllowedUsers : [];
@@ -429,6 +447,47 @@ const AdminDashboard = () => {
         fetchDays(); showToast('Task Deleted');
         setShowConfirmModal({ show: false });
       } catch (err) { showToast('Delete failed', 'error'); }
+    });
+  };
+
+  const handleSendBroadcastEmail = async (e) => {
+    e.preventDefault();
+    if (!emailSubject.trim() || !emailMessage.trim()) {
+      showToast('Please fill in both subject and message', 'error');
+      return;
+    }
+
+    confirmAction('Send this broadcast email?', async () => {
+      setSendingEmail(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/students/email-broadcast`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            subject: emailSubject, 
+            message: emailMessage,
+            targetMode: emailTargetMode,
+            targetGroups: emailTargetMode === 'groups' ? emailTargetGroups : [],
+            targetUsers: emailTargetMode === 'students' ? emailTargetUsers : []
+          })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message || 'Emails sent successfully!');
+          setEmailSubject('');
+          setEmailMessage('');
+          setEmailTargetGroups([]);
+          setEmailTargetUsers([]);
+          fetchEmailHistory();
+        } else {
+          showToast(data.message || 'Failed to send emails', 'error');
+        }
+      } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+      } finally {
+        setSendingEmail(false);
+        setShowConfirmModal({ show: false });
+      }
     });
   };
 
@@ -829,7 +888,7 @@ const AdminDashboard = () => {
 
       {/* ─── Tab Nav ─── */}
       <div style={{ marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '2rem' }}>
-        {['Days', 'Resource Hub', 'Students', 'Groups', 'Reports', 'Admins'].map(tab => (
+        {['Days', 'Resource Hub', 'Students', 'Groups', 'Reports', 'Admins', 'Email Students'].map(tab => (
           <button key={tab} onClick={() => setAdminTab(tab)}
             style={{ background: 'transparent', border: 'none', borderBottom: adminTab === tab ? '3px solid #f36d44' : 'none', padding: '0.75rem 0', fontWeight: 'bold', cursor: 'pointer', color: adminTab === tab ? '#f36d44' : '#64748b', fontSize: '1rem', transition: 'color 0.2s' }}>
             {tab.toUpperCase()}
@@ -1229,6 +1288,163 @@ const AdminDashboard = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════ EMAIL STUDENTS TAB ══════════ */}
+      {adminTab === 'Email Students' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <div>
+            <h3 style={{ margin: 0, color: 'var(--text-primary)', fontWeight: '900' }}>Email Broadcasting</h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Send targeted custom announcements or welcome messages directly to students' mailboxes.</p>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', alignItems: 'flex-start' }}>
+            {/* Left: Compose Form */}
+            <div className="card" style={{ padding: '2rem', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <h4 style={{ margin: '0 0 1.25rem 0', fontWeight: '900', color: '#071125', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>Compose Announcement</h4>
+              <form onSubmit={handleSendBroadcastEmail} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                
+                {/* Targeting Selection */}
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Target Recipients</label>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    {[{ key: 'all', label: '🌍 All Students' }, { key: 'groups', label: '👥 By Group' }, { key: 'students', label: '👤 By Student' }].map(({ key, label }) => (
+                      <button key={key} type="button" onClick={() => setEmailTargetMode(key)}
+                        style={{ padding: '0.4rem 0.85rem', borderRadius: '6px', border: '1px solid', fontWeight: '700', fontSize: '0.75rem', cursor: 'pointer', background: emailTargetMode === key ? '#071125' : 'white', color: emailTargetMode === key ? 'white' : '#64748b', borderColor: emailTargetMode === key ? '#071125' : '#e2e8f0', transition: 'all 0.15s' }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {emailTargetMode === 'groups' && (
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem 1rem', maxHeight: '150px', overflowY: 'auto', background: '#f8fafc' }}>
+                      {groups.length === 0 ? (
+                        <div style={{ color: '#94a3b8', fontSize: '0.820rem', textAlign: 'center', padding: '0.5rem' }}>No student groups found.</div>
+                      ) : (
+                        groups.map(g => (
+                          <label key={g._id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.35rem 0', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                            <input type="checkbox"
+                              checked={emailTargetGroups.includes(g._id)}
+                              onChange={e => {
+                                if (e.target.checked) setEmailTargetGroups([...emailTargetGroups, g._id]);
+                                else setEmailTargetGroups(emailTargetGroups.filter(id => id !== g._id));
+                              }}
+                            />
+                            <span style={{ fontWeight: '600', fontSize: '0.825rem' }}>{g.name}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {emailTargetMode === 'students' && (
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.75rem 1rem', maxHeight: '150px', overflowY: 'auto', background: '#f8fafc' }}>
+                      {students.map(s => (
+                        <label key={s._id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.35rem 0', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                          <input type="checkbox"
+                            checked={emailTargetUsers.includes(s._id)}
+                            onChange={e => {
+                              if (e.target.checked) setEmailTargetUsers([...emailTargetUsers, s._id]);
+                              else setEmailTargetUsers(emailTargetUsers.filter(id => id !== s._id));
+                            }}
+                          />
+                          <span style={{ fontSize: '0.825rem' }}>{s.roll_no} — <strong>{s.name}</strong></span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Email Subject</label>
+                  <input 
+                    type="text" 
+                    value={emailSubject} 
+                    onChange={e => setEmailSubject(e.target.value)} 
+                    placeholder="e.g. Welcome to Smart Quiz! / Quiz Instructions" 
+                    className="input-field" 
+                    required 
+                  />
+                </div>
+                
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Email Message Body</label>
+                  <textarea 
+                    value={emailMessage} 
+                    onChange={e => setEmailMessage(e.target.value)} 
+                    placeholder="Type your message details here. An HTML frame will automatically personalize the greeting..." 
+                    className="input-field" 
+                    style={{ minHeight: '150px', fontFamily: 'sans-serif', lineHeight: '1.5' }} 
+                    required 
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary" 
+                    disabled={sendingEmail}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.75rem', fontSize: '0.85rem', minWidth: '170px', justifyContent: 'center' }}
+                  >
+                    {sendingEmail ? 'Sending...' : (
+                      <>
+                        <Send size={15} /> Send Broadcast
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Right: Sending History Log */}
+            <div className="card" style={{ padding: '2rem', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', minHeight: '400px' }}>
+              <h4 style={{ margin: '0 0 1.25rem 0', fontWeight: '900', color: '#071125', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.5rem' }}>Message sending History</h4>
+              
+              <div style={{ maxHeight: '420px', overflowY: 'auto' }}>
+                {emailHistory.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8', fontSize: '0.85rem' }}>No broadcast history recorded yet.</div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.825rem' }}>
+                    <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
+                      <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <th style={{ padding: '0.5rem', textAlign: 'left', color: '#64748b' }}>SUBJECT & TARGET</th>
+                        <th style={{ padding: '0.5rem', textAlign: 'center', color: '#64748b' }}>DELIVERY STATS</th>
+                        <th style={{ padding: '0.5rem', textAlign: 'right', color: '#64748b' }}>SENT ON</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {emailHistory.map(b => (
+                        <tr key={b._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '0.75rem 0.5rem' }}>
+                            <div style={{ fontWeight: 'bold', color: '#0f172a' }}>{b.subject}</div>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.15rem' }}>
+                              Target: <span style={{ textTransform: 'capitalize', fontWeight: 'bold' }}>{b.targetMode}</span> 
+                              {b.targetNames && b.targetNames.length > 0 && ` (${b.targetNames.join(', ')})`}
+                            </div>
+                            {b.errors && b.errors.length > 0 && (
+                              <div style={{ color: '#ef4444', fontSize: '0.7rem', marginTop: '0.3rem', whiteSpace: 'pre-wrap', background: '#fef2f2', padding: '0.3rem', borderRadius: '4px' }}>
+                                ⚠️ Errors: {b.errors.slice(0, 2).join(', ')}{b.errors.length > 2 ? '...' : ''}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                            <span style={{ color: '#16a34a', fontWeight: 'bold' }}>✓ {b.successCount}</span>
+                            <span style={{ color: '#64748b', margin: '0 0.25rem' }}>/</span>
+                            <span style={{ color: b.failCount > 0 ? '#ef4444' : '#64748b', fontWeight: b.failCount > 0 ? 'bold' : 'normal' }}>✗ {b.failCount}</span>
+                          </td>
+                          <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#64748b', whiteSpace: 'nowrap' }}>
+                            {new Date(b.createdAt).toLocaleDateString()}<br/>
+                            <span style={{ fontSize: '0.72rem' }}>{new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

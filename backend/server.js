@@ -2,10 +2,11 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const server = http.createServer(app);
@@ -81,7 +82,6 @@ app.use('/api/resource-folders', require('./routes/resourceFolderRoutes'));
 const PORT = process.env.PORT || 5001;
 
 // Serve static assets in production
-const path = require('path');
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../frontend/dist')));
   app.get('*path', (req, res) => {

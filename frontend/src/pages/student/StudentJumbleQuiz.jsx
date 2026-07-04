@@ -113,7 +113,12 @@ const KeywordJumble = ({ question, qIndex, onAnswer, submitted }) => {
         <span style={{ background: '#7c3aed', color: 'white', fontWeight: '900', fontSize: '0.7rem', padding: '0.2rem 0.55rem', borderRadius: '6px', marginTop: '2px', flexShrink: 0 }}>
           🔤 Q{qIndex + 1}
         </span>
-        <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#f1f5f9', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{question.text}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+          <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#f1f5f9', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{question.text}</span>
+          <span style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+            Marks: {question.marks || 1}
+          </span>
+        </div>
       </div>
 
       <div style={{ padding: '1.25rem', background: 'var(--surface-color)' }}>
@@ -231,7 +236,12 @@ const MCQQuestion = ({ question, qIndex, onAnswer, submitted }) => {
         <span style={{ background: '#f59e0b', color: '#1c1917', fontWeight: '900', fontSize: '0.7rem', padding: '0.2rem 0.55rem', borderRadius: '6px', marginTop: '2px', flexShrink: 0 }}>
           📝 Q{qIndex + 1}
         </span>
-        <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#f1f5f9', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{question.text}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+          <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#f1f5f9', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{question.text}</span>
+          <span style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+            Marks: {question.marks || 1}
+          </span>
+        </div>
       </div>
 
       <div style={{ padding: '1.25rem', background: 'var(--surface-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

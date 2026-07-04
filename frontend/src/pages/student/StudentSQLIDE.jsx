@@ -399,11 +399,11 @@ const StudentSQLIDE = () => {
     const handleRunPatternMatch = (isPublicRun = false) => {
         if (!exam || !query.trim()) return;
         setError('');
-        setIsPublicMode(isPublicRun);
+        setIsPublicMode(false); // Always evaluate all test cases
         
         let targetCases = [];
         if (exam.questions[0].test_cases && exam.questions[0].test_cases.length > 0) {
-            targetCases = isPublicRun ? [exam.questions[0].test_cases[0]] : exam.questions[0].test_cases;
+            targetCases = exam.questions[0].test_cases;
         } else {
             // Legacy fall back
             targetCases = [{ input: exam.questions[0].sql_init, output: exam.questions[0].correct_answer }];

@@ -14,6 +14,8 @@ const userSchema = new mongoose.Schema({
     batch: { type: String, default: '' }, // e.g. "2024-28"
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     avatar_color: { type: String, default: '#3b82f6' }, // For avatar UI
+    resetPasswordOTP: { type: String },
+    resetPasswordOTPExpires: { type: Date },
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

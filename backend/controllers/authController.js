@@ -122,3 +122,107 @@ exports.deleteAdmin = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+const nodemailer = require('nodemailer');
+
+exports.forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required' });
+        }
+
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: 'No account with that email address exists.' });
+        }
+
+        // Generate 6-digit numeric OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        user.resetPasswordOTP = otp;
+        user.resetPasswordOTPExpires = Date.now() + 10 * 60 * 1000; // 10 minutes from now
+        await user.save();
+
+        console.log(`[PASSWORD RESET] OTP generated for ${email}: ${otp}`);
+
+        // Try sending email via SMTP if configured
+        const hasSMTP = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
+        if (hasSMTP) {
+            try {
+                const transporter = nodemailer.createTransport({
+                    host: process.env.SMTP_HOST,
+                    port: parseInt(process.env.SMTP_PORT || '587'),
+                    secure: process.env.SMTP_PORT === '465',
+                    auth: {
+                        user: process.env.SMTP_USER,
+                        pass: process.env.SMTP_PASS
+                    }
+                });
+
+                const mailOptions = {
+                    from: process.env.SMTP_FROM || `"Smart Quiz Admin" <${process.env.SMTP_USER}>`,
+                    to: email,
+                    subject: 'Smart Quiz Password Reset OTP',
+                    text: `You requested a password reset for your Smart Quiz account.\n\nYour One-Time Password (OTP) is: ${otp}\n\nThis OTP is valid for 10 minutes. If you did not request this, please ignore this email.`,
+                    html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 600px;">
+                        <h2 style="color: #7c3aed;">Smart Quiz Password Recovery</h2>
+                        <p>Hello <strong>${user.name}</strong>,</p>
+                        <p>You requested a password reset. Please use the following One-Time Password (OTP) to reset your password:</p>
+                        <div style="background-color: #f3f4f6; border: 1px dashed #7c3aed; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #1f2937; margin: 20px 0;">
+                            ${otp}
+                        </div>
+                        <p style="font-size: 12px; color: #6b7280;">This OTP will expire in 10 minutes. If you did not request this password reset, please ignore this email or contact the admin.</p>
+                    </div>`
+                };
+
+                await transporter.sendMail(mailOptions);
+                return res.json({ message: 'An OTP has been sent to your email address.' });
+            } catch (smtpErr) {
+                console.error('[SMTP ERROR] Failed to send email via SMTP:', smtpErr.message || smtpErr);
+                return res.json({ 
+                    message: 'An OTP has been sent to your email address (Development Mode Fallback: Check server terminal for OTP).' 
+                });
+            }
+        } else {
+            // SMTP fallback: return successfully but log to terminal.
+            return res.json({ 
+                message: 'An OTP has been sent to your email address (Development Mode: Check server terminal for OTP).' 
+            });
+        }
+
+    } catch (err) {
+        console.error('Forgot password error:', err);
+        res.status(500).json({ message: 'Server error: Failed to process request' });
+    }
+};
+
+exports.resetPassword = async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ message: 'Email, OTP, and new password are required' });
+        }
+
+        const user = await User.findOne({
+            email,
+            resetPasswordOTP: otp,
+            resetPasswordOTPExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid or expired OTP' });
+        }
+
+        // Hash and save the new password
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+        user.resetPasswordOTP = undefined;
+        user.resetPasswordOTPExpires = undefined;
+        await user.save();
+
+        res.json({ message: 'Your password has been successfully updated.' });
+    } catch (err) {
+        console.error('Reset password error:', err);
+        res.status(500).json({ message: 'Server error: Failed to update password' });
+    }
+};

@@ -468,9 +468,12 @@ const StudentQuizMode = () => {
           <div style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
             {exam.questions.map((q, idx) => (
               <div key={q._id || idx} style={{ marginBottom: '2.5rem', padding: '1.5rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '1rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '0.5rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
                   <span style={{ color: 'var(--primary-color)', marginRight: '0.5rem' }}>Q{idx + 1}.</span> {q.text}
                 </h3>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '1rem', fontWeight: '500' }}>
+                  Marks: {q.marks || 1}
+                </div>
                 
                 {q.type === 'MCQ' && q.options && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>

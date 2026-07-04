@@ -20,7 +20,8 @@ const examSchema = new mongoose.Schema({
             input: { type: String },
             output: { type: String }
         }],
-        marks: { type: Number, default: 1 }
+        marks: { type: Number, default: 1 },
+        negativeMarks: { type: Number, default: 0 }
     }],
     allowedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Array of student IDs, empty means all
     allowedGroups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Group' }], // Array of group IDs

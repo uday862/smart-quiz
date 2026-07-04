@@ -2,6 +2,7 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const XLSX = require('xlsx');
+const nodemailer = require('nodemailer');
 
 // Multer in-memory storage for Excel
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -159,3 +160,148 @@ exports.uploadStudentsExcel = [
         }
     }
 ];
+
+// Send broadcast email to targeted students
+exports.emailStudents = async (req, res) => {
+    try {
+        const { subject, message, targetMode, targetGroups, targetUsers } = req.body;
+        if (!subject || !message) {
+            return res.status(400).json({ message: 'Subject and message are required' });
+        }
+
+        const EmailBroadcast = require('../models/EmailBroadcast');
+        const Group = require('../models/Group');
+
+        let students = [];
+        let targetNames = [];
+
+        if (targetMode === 'groups') {
+            if (!targetGroups || targetGroups.length === 0) {
+                return res.status(400).json({ message: 'At least one group must be selected' });
+            }
+            // Fetch groups to get members and names
+            const groupsList = await Group.find({ _id: { $in: targetGroups } }).populate('members');
+            targetNames = groupsList.map(g => g.name);
+            
+            const memberIds = new Set();
+            groupsList.forEach(g => {
+                (g.members || []).forEach(m => {
+                    memberIds.add(String(m._id || m));
+                });
+            });
+
+            students = await User.find({
+                _id: { $in: Array.from(memberIds) },
+                role: 'student',
+                email: { $exists: true, $ne: '' }
+            });
+        } else if (targetMode === 'students') {
+            if (!targetUsers || targetUsers.length === 0) {
+                return res.status(400).json({ message: 'At least one student must be selected' });
+            }
+            students = await User.find({
+                _id: { $in: targetUsers },
+                role: 'student',
+                email: { $exists: true, $ne: '' }
+            });
+            targetNames = students.map(s => `${s.roll_no} (${s.name})`);
+        } else {
+            // targetMode === 'all'
+            students = await User.find({
+                role: 'student',
+                email: { $exists: true, $ne: '' }
+            });
+            targetNames = ['All Students'];
+        }
+
+        if (students.length === 0) {
+            return res.status(404).json({ message: 'No matching students with email addresses found' });
+        }
+
+        const hasSMTP = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
+        if (!hasSMTP) {
+            return res.status(400).json({ message: 'SMTP is not configured on the server. Cannot send email.' });
+        }
+
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: parseInt(process.env.SMTP_PORT || '587'),
+            secure: process.env.SMTP_PORT === '465',
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS
+            }
+        });
+
+        let successCount = 0;
+        let failCount = 0;
+        const errors = [];
+
+        // Send to each student
+        for (const student of students) {
+            try {
+                const mailOptions = {
+                    from: process.env.SMTP_FROM || `"Smart Quiz Admin" <${process.env.SMTP_USER}>`,
+                    to: student.email,
+                    subject: subject,
+                    text: message,
+                    html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 600px;">
+                        <h2 style="color: #071125;">Message from Smart Quiz Admin</h2>
+                        <p>Hello <strong>${student.name}</strong>,</p>
+                        <div style="line-height: 1.6; color: #334155; margin: 20px 0; white-space: pre-wrap;">
+                            ${message}
+                        </div>
+                        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+                        <p style="font-size: 11px; color: #94a3b8;">This is a broadcast message sent by your administrator.</p>
+                    </div>`
+                };
+
+                await transporter.sendMail(mailOptions);
+                successCount++;
+            } catch (err) {
+                console.error(`Failed to send email to ${student.email}:`, err.message);
+                failCount++;
+                errors.push(`${student.email}: ${err.message}`);
+            }
+        }
+
+        // Save history record
+        try {
+            await EmailBroadcast.create({
+                subject,
+                message,
+                sender: req.user ? req.user.id : null,
+                targetMode: targetMode || 'all',
+                targetNames,
+                successCount,
+                failCount,
+                errors
+            });
+        } catch (dbErr) {
+            console.error('Failed to log EmailBroadcast to database:', dbErr.message);
+        }
+
+        res.json({
+            message: `Broadcasting complete: ${successCount} sent successfully, ${failCount} failed.`,
+            successCount,
+            failCount,
+            errors
+        });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error during broadcast', error: err.message });
+    }
+};
+
+// Fetch email sending history
+exports.getEmailHistory = async (req, res) => {
+    try {
+        const EmailBroadcast = require('../models/EmailBroadcast');
+        const history = await EmailBroadcast.find()
+            .populate('sender', 'name')
+            .sort({ createdAt: -1 })
+            .lean();
+        res.json(history);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error fetching history', error: err.message });
+    }
+};

@@ -60,8 +60,8 @@ const StudentReview = () => {
   const { attempted, unattempted } = getAttemptedStats();
 
   const getPercentage = () => {
-    const totalQuestions = exam.questions.length || 1;
-    return ((attempt.score / totalQuestions) * 100).toFixed(2);
+    const totalMarks = exam.questions.reduce((sum, q) => sum + (q.marks || 1), 0) || 1;
+    return ((attempt.score / totalMarks) * 100).toFixed(2);
   };
 
   const formatTimeTaken = () => {
@@ -122,7 +122,7 @@ const StudentReview = () => {
                 <tr><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Time taken</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a' }}>{formatTimeTaken()}</td></tr>
                 <tr style={{ background: '#f8fafc' }}><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Attempted Questions</td><td style={{ padding: '0.75rem 1.5rem', color: '#16a34a', fontWeight: 'bold' }}>{attempted}</td></tr>
                 <tr><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Unattempted Questions</td><td style={{ padding: '0.75rem 1.5rem', color: '#dc2626', fontWeight: 'bold' }}>{unattempted}</td></tr>
-                <tr style={{ background: '#f8fafc' }}><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Marks</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a' }}>{attempt.score}.00/{exam.questions.length}.00</td></tr>
+                <tr style={{ background: '#f8fafc' }}><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Marks</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a' }}>{attempt.score}.00/{exam.questions.reduce((sum, q) => sum + (q.marks || 1), 0)}.00</td></tr>
                 <tr><td style={{ padding: '0.75rem 1.5rem', fontWeight: 'bold', color: '#475569', textAlign: 'right' }}>Grade</td><td style={{ padding: '0.75rem 1.5rem', color: '#0f172a', fontWeight: 'bold' }}>{getPercentage()} out of 100.00</td></tr>
               </tbody>
             </table>
@@ -147,7 +147,7 @@ const StudentReview = () => {
                   <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '0.5rem', fontSize: '1rem' }}>Question <span style={{ fontSize: '1.25rem' }}>{idx + 1}</span></div>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '1rem' }}>
                     {isUnattempted ? 'Unattempted' : (isCorrect ? 'Correct' : 'Incorrect')}<br/>
-                    Mark {isCorrect ? '1.00' : '0.00'} out of 1.00
+                    Mark {isCorrect ? (q.marks || 1).toFixed(2) : '0.00'} out of {(q.marks || 1).toFixed(2)}
                   </div>
                   <div className="no-print" style={{ fontSize: '0.75rem', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span style={{ color: '#ef4444' }}>⚑</span> Flag question

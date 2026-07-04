@@ -113,7 +113,8 @@ const StudentDashboard = ({ tab }) => {
 
   const getActiveTasks = () => {
     if (!user) return [];
-    return days.flatMap(d => d.tasks.filter(t => t.status === 'running' && isTaskAccessible(t)));
+    const tasks = days.flatMap(d => d.tasks.filter(t => t.status === 'running' && isTaskAccessible(t)));
+    return tasks.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   };
   const getCompletedTasks = () => {
     const bestMap = new Map();
@@ -285,7 +286,7 @@ const StudentDashboard = ({ tab }) => {
                       <td style={{ textAlign: 'center', padding: '1rem' }}>{idx + 1}</td>
                       <td style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{att.exam?.title}</td>
                       <td style={{ textAlign: 'center', color: '#f36d44', fontWeight: 'bold' }}>
-                          {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `${att.score} / 100` : `${att.score} / ${att.exam?.questions?.length || 1}`}
+                          {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `${att.score} / 100` : `${att.score} / ${att.exam?.questions?.reduce((sum, q) => sum + (q.marks || 1), 0) || 1}`}
                       </td>
                       <td style={{ textAlign: 'center', color: '#777' }}>{new Date(att.updatedAt).toLocaleDateString()}</td>
                       <td style={{ textAlign: 'right', paddingRight: '2rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>

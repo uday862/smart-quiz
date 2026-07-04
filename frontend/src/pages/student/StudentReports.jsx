@@ -42,7 +42,8 @@ const StudentReports = () => {
     let yPos = 70;
     reports.forEach((report, idx) => {
       doc.text(`${idx + 1}. ${report.exam?.title || 'Task'}`, 20, yPos);
-      doc.text(`Score: ${report.score}/${report.exam?.questions?.length || '?'} | Status: ${report.status || 'Completed'} | Date: ${new Date(report.createdAt).toLocaleDateString()}`, 20, yPos + 8);
+      const total = report.exam?.questions?.reduce((sum, q) => sum + (q.marks || 1), 0) || '?';
+      doc.text(`Score: ${report.score}/${total} | Status: ${report.status || 'Completed'} | Date: ${new Date(report.createdAt).toLocaleDateString()}`, 20, yPos + 8);
       yPos += 25;
       if (yPos > 270) {
         doc.addPage();

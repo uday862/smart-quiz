@@ -7,6 +7,8 @@ router.post('/login', authController.login);
 router.post('/register-admin', requireAdmin, authController.registerAdmin);
 router.put('/update-password', requireAuth, authController.updatePassword);
 router.put('/update-profile', requireAuth, authController.updateProfile);
+router.post('/forgot-password', authController.forgotPassword);
+router.post('/reset-password', authController.resetPassword);
 
 router.get('/admins', requireAdmin, authController.getAdmins);
 router.delete('/admins/:id', requireAdmin, authController.deleteAdmin);

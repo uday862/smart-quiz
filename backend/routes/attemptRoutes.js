@@ -162,7 +162,7 @@ router.put('/:id/submit', requireAuth, async (req, res) => {
             });
         }
         
-        let finalScore = serverScore;
+        let finalScore = Math.max(0, serverScore);
         
         // Server-side SQL validation for SQL questions using ALASQL (bypasses sqlite3 native binary issues)
         if (attempt.exam?.questions?.[0]?.type === 'SQL' && answers?.[0]?.answer) {
