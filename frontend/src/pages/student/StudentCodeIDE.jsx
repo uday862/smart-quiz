@@ -370,7 +370,7 @@ const StudentQuizMode = () => {
             flags: flagsRef.current,
             status: 'completed',
             spam: !!options?.forceSpam,
-            answers: Object.keys(currentAnswers).map(key => ({ question_id: key, answer: currentAnswers[key] }))
+            answers: exam.questions.map(q => ({ question_id: q._id, answer: currentAnswers[q._id] || '' }))
           })
         });
         const updatedAttempt = await res.json();

@@ -141,7 +141,7 @@ router.put('/:id/submit', requireAuth, async (req, res) => {
             attempt.exam.questions.forEach((q, idx) => {
                 if (q.type === 'MCQ') {
                     const studentAns = answers.find(a => String(a.question_id) === String(q._id))?.answer;
-                    if (studentAns === q.correct_answer) {
+                    if (studentAns !== undefined && studentAns !== null && String(studentAns).trim() !== '' && q.correct_answer && String(studentAns).trim() === String(q.correct_answer).trim()) {
                         serverScore += (q.marks || 1);
                     }
                 } else if (q.type === 'Jumble') {
