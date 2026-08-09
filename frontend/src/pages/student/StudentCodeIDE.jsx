@@ -79,7 +79,12 @@ const StudentQuizMode = () => {
   const [submitting, setSubmitting] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isFullscreenEnforced, setIsFullscreenEnforced] = useState(true);
+  // Per-Question Timer States
+  const [currentQIndex, setCurrentQIndex] = useState(0);
+  const [qTimeLeft, setQTimeLeft] = useState(null);
+
   const timerRef = useRef(null);
+  const qTimerRef = useRef(null);
   const answersRef = useRef({});
   const flagsRef = useRef(0);
 
@@ -194,6 +199,9 @@ const StudentQuizMode = () => {
           }
           
           setExam(found);
+          if (found.perQuestionTimerEnabled) {
+            setQTimeLeft(found.perQuestionTimeLimit || 60);
+          }
           window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: found.fullWindow } }));
 
           // FIRE START ATTEMPT
@@ -248,6 +256,7 @@ const StudentQuizMode = () => {
     
     return () => {
       clearInterval(timerRef.current);
+      clearInterval(qTimerRef.current);
       window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: false } }));
     };
   }, [id, navigate]);
@@ -260,6 +269,36 @@ const StudentQuizMode = () => {
       return () => clearInterval(timerRef.current);
     }
   }, [exam, submitted, timeLeft, isOnline]);
+
+  // Per-Question Timer Effect
+  useEffect(() => {
+    if (exam && exam.perQuestionTimerEnabled && !submitted && isOnline && qTimeLeft !== null) {
+      if (qTimeLeft <= 0) {
+        if (currentQIndex + 1 < exam.questions.length) {
+          setCurrentQIndex(prev => prev + 1);
+          setQTimeLeft(exam.perQuestionTimeLimit || 60);
+        } else {
+          handleSubmit(new Event('submit'));
+        }
+        return;
+      }
+
+      qTimerRef.current = setInterval(() => {
+        setQTimeLeft(prev => (prev !== null ? Math.max(0, prev - 1) : 0));
+      }, 1000);
+      return () => clearInterval(qTimerRef.current);
+    }
+  }, [exam, submitted, isOnline, qTimeLeft, currentQIndex]);
+
+  const handleNextQuestion = () => {
+    if (!exam) return;
+    if (currentQIndex + 1 < exam.questions.length) {
+      setCurrentQIndex(prev => prev + 1);
+      setQTimeLeft(exam.perQuestionTimeLimit || 60);
+    } else {
+      handleSubmit(new Event('submit'));
+    }
+  };
 
   useEffect(() => {
     if (exam && !submitted && timeLeft !== null && timeLeft <= 0) {
@@ -315,6 +354,7 @@ const StudentQuizMode = () => {
     // Server will evaluate
     setScore(0);
     clearInterval(timerRef.current);
+    clearInterval(qTimerRef.current);
 
     // Save to DB via PUT
     try {
@@ -466,93 +506,179 @@ const StudentQuizMode = () => {
           </div>
 
           <div style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
-            {exam.questions.map((q, idx) => (
-              <div key={q._id || idx} style={{ marginBottom: '2.5rem', padding: '1.5rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '1rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
-                  <span style={{ color: 'var(--primary-color)', marginRight: '0.5rem' }}>Q{idx + 1}.</span> {q.text}
-                </h3>
-                
-                {q.type === 'MCQ' && q.options && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
-                    {q.options.map((opt, i) => (
-                      <label 
-                        key={i} 
+            {exam.perQuestionTimerEnabled ? (
+              /* Per-Question Timer Mode: Only Active Question */
+              (() => {
+                const q = exam.questions[currentQIndex];
+                if (!q) return null;
+                return (
+                  <div>
+                    {/* Banner */}
+                    <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '0.85rem 1.25rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#991b1b' }}>
+                        ⏱ <strong>Per-Question Mode:</strong> Question {currentQIndex + 1} of {exam.questions.length} (Disappears when time expires)
+                      </span>
+                      <span style={{ fontSize: '1.25rem', fontWeight: '900', color: qTimeLeft <= 10 ? '#ef4444' : '#d97706', fontVariantNumeric: 'tabular-nums' }}>
+                        ⏱ {qTimeLeft !== null ? `${qTimeLeft}s` : '--'}
+                      </span>
+                    </div>
+
+                    <div style={{ marginBottom: '2.5rem', padding: '1.5rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '1rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+                        <span style={{ color: 'var(--primary-color)', marginRight: '0.5rem' }}>Q{currentQIndex + 1}.</span> {q.text}
+                      </h3>
+                      
+                      {q.type === 'MCQ' && q.options && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+                          {q.options.map((opt, i) => (
+                            <label 
+                              key={i} 
+                              style={{ 
+                                display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', 
+                                border: answers[q._id] === opt ? '2px solid var(--primary-color)' : '1px solid var(--border-color)', 
+                                borderRadius: '6px', cursor: 'pointer',
+                                background: answers[q._id] === opt ? '#fff7ed' : 'transparent',
+                                transition: 'all 0.2s', fontWeight: '500'
+                              }}
+                            >
+                              <input 
+                                type="radio" 
+                                name={`q_${q._id}`} 
+                                value={opt} 
+                                checked={answers[q._id] === opt} 
+                                onChange={() => handleOptionSelect(q._id, opt)}
+                                disabled={submitted}
+                                style={{ accentColor: 'var(--primary-color)', transform: 'scale(1.2)' }}
+                              />
+                              {opt}
+                            </label>
+                          ))}
+                          {answers[q._id] && !submitted && (
+                            <button
+                              type="button"
+                              onClick={() => handleClearAnswer(q._id)}
+                              style={{
+                                alignSelf: 'flex-start',
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ef4444',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                marginTop: '0.5rem',
+                                fontSize: '0.85rem'
+                              }}
+                            >
+                              Clear Selection
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                      {currentQIndex + 1 < exam.questions.length ? (
+                        <button type="button" onClick={handleNextQuestion} className="btn btn-primary" style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#2563eb' }}>
+                          Next Question ▶
+                        </button>
+                      ) : (
+                        <button type="button" onClick={() => handleSubmit(new Event('submit'))} className="btn btn-primary" style={{ padding: '0.75rem 2rem', fontSize: '1rem', background: '#16a34a' }}>
+                          Finish & Submit Exam ✅
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              /* Normal Mode: All Questions */
+              exam.questions.map((q, idx) => (
+                <div key={q._id || idx} style={{ marginBottom: '2.5rem', padding: '1.5rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '1rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+                    <span style={{ color: 'var(--primary-color)', marginRight: '0.5rem' }}>Q{idx + 1}.</span> {q.text}
+                  </h3>
+                  
+                  {q.type === 'MCQ' && q.options && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+                      {q.options.map((opt, i) => (
+                        <label 
+                          key={i} 
+                          style={{ 
+                            display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', 
+                            border: answers[q._id] === opt ? '2px solid var(--primary-color)' : '1px solid var(--border-color)', 
+                            borderRadius: '6px', cursor: 'pointer',
+                            background: answers[q._id] === opt ? '#fff7ed' : 'transparent',
+                            transition: 'all 0.2s', fontWeight: '500'
+                          }}
+                        >
+                          <input 
+                            type="radio" 
+                            name={`q_${q._id}`} 
+                            value={opt} 
+                            checked={answers[q._id] === opt} 
+                            onChange={() => handleOptionSelect(q._id, opt)}
+                            disabled={submitted}
+                            style={{ accentColor: 'var(--primary-color)', transform: 'scale(1.2)' }}
+                          />
+                          {opt}
+                        </label>
+                      ))}
+                      {answers[q._id] && !submitted && (
+                        <button
+                          type="button"
+                          onClick={() => handleClearAnswer(q._id)}
+                          style={{
+                            alignSelf: 'flex-start',
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#ef4444',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            marginTop: '0.5rem',
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          Clear Selection
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  
+                  {q.type === 'Coding' && (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <textarea 
+                        placeholder="// Write your code here..."
+                        value={answers[q._id] || ''}
+                        onChange={(e) => setAnswers({ ...answers, [q._id]: e.target.value })}
+                        disabled={submitted}
                         style={{ 
-                          display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', 
-                          border: answers[q._id] === opt ? '2px solid var(--primary-color)' : '1px solid var(--border-color)', 
-                          borderRadius: '6px', cursor: 'pointer',
-                          background: answers[q._id] === opt ? '#fff7ed' : 'transparent',
-                          transition: 'all 0.2s', fontWeight: '500'
+                          width: '100%', height: '200px', background: '#1e293b', border: '1px solid var(--border-color)', 
+                          color: '#e2e8f0', fontFamily: 'monospace', padding: '1rem', resize: 'vertical', outline: 'none',
+                          borderRadius: '8px', marginTop: '1rem'
                         }}
-                      >
-                        <input 
-                          type="radio" 
-                          name={`q_${q._id}`} 
-                          value={opt} 
-                          checked={answers[q._id] === opt} 
-                          onChange={() => handleOptionSelect(q._id, opt)}
-                          disabled={submitted}
-                          style={{ accentColor: 'var(--primary-color)', transform: 'scale(1.2)' }}
-                        />
-                        {opt}
-                      </label>
-                    ))}
-                    {answers[q._id] && !submitted && (
-                      <button
-                        type="button"
-                        onClick={() => handleClearAnswer(q._id)}
-                        style={{
-                          alignSelf: 'flex-start',
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ef4444',
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          marginTop: '0.5rem',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        Clear Selection
-                      </button>
-                    )}
-                  </div>
-                )}
-                
-                {q.type === 'Coding' && (
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <textarea 
-                      placeholder="// Write your code here..."
-                      value={answers[q._id] || ''}
-                      onChange={(e) => setAnswers({ ...answers, [q._id]: e.target.value })}
-                      disabled={submitted}
-                      style={{ 
-                        width: '100%', height: '200px', background: '#1e293b', border: '1px solid var(--border-color)', 
-                        color: '#e2e8f0', fontFamily: 'monospace', padding: '1rem', resize: 'vertical', outline: 'none',
-                        borderRadius: '8px', marginTop: '1rem'
-                      }}
-                    />
-                    {answers[q._id] && !submitted && (
-                      <button
-                        type="button"
-                        onClick={() => handleClearAnswer(q._id)}
-                        style={{
-                          alignSelf: 'flex-start',
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ef4444',
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          marginTop: '0.5rem',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        Clear Answer
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+                      />
+                      {answers[q._id] && !submitted && (
+                        <button
+                          type="button"
+                          onClick={() => handleClearAnswer(q._id)}
+                          style={{
+                            alignSelf: 'flex-start',
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#ef4444',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            marginTop: '0.5rem',
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          Clear Answer
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -590,13 +716,19 @@ const StudentQuizMode = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.4rem', maxHeight: '200px', overflowY: 'auto', padding: '0.5rem', background: '#f1f5f9', borderRadius: '6px' }}>
                      {exam.questions.map((q, idx) => {
                        const isAttempted = !!answers[q._id];
+                       const isPast = exam.perQuestionTimerEnabled && idx < currentQIndex;
+                       const isCurrent = exam.perQuestionTimerEnabled && idx === currentQIndex;
                        return (
                          <div key={idx} style={{ 
                            height: '35px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', 
-                           border: '1px solid #cbd5e1', background: 'var(--surface-color)', position: 'relative', borderRadius: '2px'
+                           border: isCurrent ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                           background: isPast ? '#f1f5f9' : 'var(--surface-color)', position: 'relative', borderRadius: '2px',
+                           opacity: isPast ? 0.6 : 1
                          }}>
-                           <div style={{ fontSize: '0.75rem', fontWeight: 'bold', flex: 1, display: 'flex', alignItems: 'center' }}>{idx + 1}</div>
-                           <div style={{ width: '100%', height: '10px', background: isAttempted ? '#16a34a' : '#dc2626', opacity: 0.8 }}></div>
+                           <div style={{ fontSize: '0.75rem', fontWeight: 'bold', flex: 1, display: 'flex', alignItems: 'center', color: isPast ? '#94a3b8' : '#1e293b' }}>
+                             {idx + 1} {isPast ? '🔒' : ''}
+                           </div>
+                           <div style={{ width: '100%', height: '10px', background: isAttempted ? '#16a34a' : isPast ? '#94a3b8' : '#dc2626', opacity: 0.8 }}></div>
                          </div>
                        );
                      })}
