@@ -28,7 +28,10 @@ const examSchema = new mongoose.Schema({
     isResource: { type: Boolean, default: false },
     resourceFolderId: { type: mongoose.Schema.Types.ObjectId, ref: 'ResourceFolder' },
     fullWindow: { type: Boolean, default: false },
-    flagLimit: { type: Number, default: 10 }
+    flagLimit: { type: Number, default: 10 },
+    showLeaderboard: { type: Boolean, default: true },
+    perQuestionTimerEnabled: { type: Boolean, default: false },
+    perQuestionTimeLimit: { type: Number, default: 60 } // time per question in seconds (e.g. 60s)
 }, { timestamps: true });
 
 module.exports = mongoose.model('Exam', examSchema);

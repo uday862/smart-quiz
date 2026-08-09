@@ -21,7 +21,7 @@ router.get('/', requireAuth, async (req, res) => {
         const exams = await Exam.find({
             status: { $in: ['running', 'not_started'] },
             isDeleted: { $ne: true }
-        }).lean();
+        }).sort({ createdAt: -1 }).lean();
 
         if (req.user.role === 'admin') {
             return res.json(exams);

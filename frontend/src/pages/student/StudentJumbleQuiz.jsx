@@ -300,7 +300,12 @@ const StudentJumbleQuiz = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isFullscreenEnforced, setIsFullscreenEnforced] = useState(true);
 
+  // Per-Question Timer States
+  const [currentQIndex, setCurrentQIndex] = useState(0);
+  const [qTimeLeft, setQTimeLeft] = useState(null);
+
   const timerRef = useRef(null);
+  const qTimerRef = useRef(null);
   const answersRef = useRef({});
   const flagsRef = useRef(0);
 
@@ -409,6 +414,9 @@ const StudentJumbleQuiz = () => {
         const past = await attRes.json();
 
         setExam(found);
+        if (found.perQuestionTimerEnabled) {
+          setQTimeLeft(found.perQuestionTimeLimit || 60);
+        }
         window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: found.fullWindow } }));
 
         const initAns = {};
@@ -451,6 +459,7 @@ const StudentJumbleQuiz = () => {
     init();
     return () => {
       clearInterval(timerRef.current);
+      clearInterval(qTimerRef.current);
       window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: false } }));
     };
   }, [id, navigate]);
@@ -463,6 +472,36 @@ const StudentJumbleQuiz = () => {
       return () => clearInterval(timerRef.current);
     }
   }, [exam, submitted, timeLeft, isOnline]);
+
+  // Per-Question Timer Effect
+  useEffect(() => {
+    if (exam && exam.perQuestionTimerEnabled && !submitted && isOnline && qTimeLeft !== null) {
+      if (qTimeLeft <= 0) {
+        if (currentQIndex + 1 < exam.questions.length) {
+          setCurrentQIndex(prev => prev + 1);
+          setQTimeLeft(exam.perQuestionTimeLimit || 60);
+        } else {
+          handleSubmit();
+        }
+        return;
+      }
+
+      qTimerRef.current = setInterval(() => {
+        setQTimeLeft(prev => (prev !== null ? Math.max(0, prev - 1) : 0));
+      }, 1000);
+      return () => clearInterval(qTimerRef.current);
+    }
+  }, [exam, submitted, isOnline, qTimeLeft, currentQIndex]);
+
+  const handleNextQuestion = () => {
+    if (!exam) return;
+    if (currentQIndex + 1 < exam.questions.length) {
+      setCurrentQIndex(prev => prev + 1);
+      setQTimeLeft(exam.perQuestionTimeLimit || 60);
+    } else {
+      handleSubmit();
+    }
+  };
 
   useEffect(() => {
     if (exam && !submitted && timeLeft !== null && timeLeft <= 0) {
@@ -493,6 +532,7 @@ const StudentJumbleQuiz = () => {
     // Set a placeholder score; backend will evaluate
     setScore(0);
     clearInterval(timerRef.current);
+    clearInterval(qTimerRef.current);
 
     try {
       const currentAttemptId = activeAttemptIdRef.current;
@@ -667,6 +707,49 @@ const StudentJumbleQuiz = () => {
               Go to Dashboard
             </button>
           </div>
+        ) : exam.perQuestionTimerEnabled ? (
+          <>
+            {/* Per-Question Timer Instructions banner */}
+            <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '12px', padding: '0.75rem 1.25rem', marginBottom: '1.75rem', fontSize: '0.85rem', color: '#fca5a5', fontWeight: '600', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '1.2rem' }}>⏱</span>
+                <span><strong>Per-Question Timer Mode:</strong> Question {currentQIndex + 1} of {totalQ} (auto-disappears when timer expires)</span>
+              </span>
+              <span style={{ fontSize: '1.15rem', fontWeight: '900', color: qTimeLeft <= 10 ? '#ef4444' : '#fbbf24', fontVariantNumeric: 'tabular-nums' }}>
+                ⏱ {qTimeLeft !== null ? `${qTimeLeft}s` : '--'}
+              </span>
+            </div>
+
+            {/* Active Question Only */}
+            {(() => {
+              const q = exam.questions[currentQIndex];
+              if (!q) return null;
+              return q.type === 'Jumble'
+                ? <KeywordJumble key={q._id || currentQIndex} question={q} qIndex={currentQIndex} onAnswer={handleAnswer} submitted={submitted} />
+                : <MCQQuestion key={q._id || currentQIndex} question={q} qIndex={currentQIndex} onAnswer={handleAnswer} submitted={submitted} />;
+            })()}
+
+            {/* Next / Submit Button */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', marginBottom: '3rem' }}>
+              {currentQIndex + 1 < totalQ ? (
+                <button onClick={handleNextQuestion} style={{
+                  background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', color: 'white', border: 'none',
+                  padding: '0.9rem 3.5rem', borderRadius: '12px', fontWeight: '900', fontSize: '1rem',
+                  cursor: 'pointer', boxShadow: '0 6px 20px rgba(37,99,235,0.4)', letterSpacing: '0.3px',
+                }}>
+                  Next Question ▶
+                </button>
+              ) : (
+                <button onClick={handleSubmit} style={{
+                  background: 'linear-gradient(135deg,#7c3aed,#5b21b6)', color: 'white', border: 'none',
+                  padding: '1rem 4rem', borderRadius: '12px', fontWeight: '900', fontSize: '1.05rem',
+                  cursor: 'pointer', boxShadow: '0 6px 24px rgba(124,58,237,0.4)', letterSpacing: '0.3px',
+                }}>
+                  ✅ Finish & Submit Quiz
+                </button>
+              )}
+            </div>
+          </>
         ) : (
           <>
             {/* Instructions banner */}

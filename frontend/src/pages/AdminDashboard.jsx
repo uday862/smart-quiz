@@ -109,6 +109,9 @@ const AdminDashboard = () => {
   const [tNotes, setTNotes] = useState('');
   const [tFullWindow, setTFullWindow] = useState(false);
   const [tFlagLimit, setTFlagLimit] = useState(10);
+  const [tShowLeaderboard, setTShowLeaderboard] = useState(true);
+  const [tPerQuestionTimerEnabled, setTPerQuestionTimerEnabled] = useState(false);
+  const [tPerQuestionTimeLimit, setTPerQuestionTimeLimit] = useState(60);
 
   /* ─── Student / Profile states ─── */
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -327,6 +330,9 @@ const AdminDashboard = () => {
     setTTestCases([{ input: '', output: '' }]); setTSampleIn(''); setTSampleOut('');
     setTFullWindow(false);
     setTFlagLimit(10);
+    setTShowLeaderboard(true);
+    setTPerQuestionTimerEnabled(false);
+    setTPerQuestionTimeLimit(60);
     setShowTaskModal(true);
   };
 
@@ -339,6 +345,9 @@ const AdminDashboard = () => {
     setTAttempts(task.attempt_limit || 1);
     setTFullWindow(task.fullWindow || false);
     setTFlagLimit(task.flagLimit !== undefined ? task.flagLimit : 10);
+    setTShowLeaderboard(task.showLeaderboard !== undefined ? task.showLeaderboard : true);
+    setTPerQuestionTimerEnabled(task.perQuestionTimerEnabled || false);
+    setTPerQuestionTimeLimit(task.perQuestionTimeLimit !== undefined ? task.perQuestionTimeLimit : 60);
     const au = task.allowedUsers || [];
     const ag = task.allowedGroups || [];
     setTAllowedUsers(au);
@@ -410,7 +419,21 @@ const AdminDashboard = () => {
       const url = editingTask ? `${API_BASE_URL}/api/exams/${editingTask._id}` : `${API_BASE_URL}/api/exams`;
       const res = await fetch(url, {
         method, headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dayId: tDayId, title: tTitle, notes: tNotes, time_limit: tTime, attempt_limit: tAttempts, fullWindow: tFullWindow, flagLimit: tFlagLimit, questions, allowedUsers, allowedGroups })
+        body: JSON.stringify({
+          dayId: tDayId,
+          title: tTitle,
+          notes: tNotes,
+          time_limit: tTime,
+          attempt_limit: tAttempts,
+          fullWindow: tFullWindow,
+          flagLimit: tFlagLimit,
+          showLeaderboard: tShowLeaderboard,
+          perQuestionTimerEnabled: tPerQuestionTimerEnabled,
+          perQuestionTimeLimit: Number(tPerQuestionTimeLimit),
+          questions,
+          allowedUsers,
+          allowedGroups
+        })
       });
       if (res.ok) {
         fetchDays(); closeTaskModal();
@@ -1594,6 +1617,28 @@ const AdminDashboard = () => {
                       <input type="number" min="1" max="100" value={tFlagLimit} onChange={e => setTFlagLimit(Number(e.target.value))} className="input-field" placeholder="e.g. 10" required />
                     </div>
                   )}
+
+                  <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.6rem', marginTop: '0.2rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <input type="checkbox" id="showLeaderboard" checked={tShowLeaderboard} onChange={e => setTShowLeaderboard(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                      <label htmlFor="showLeaderboard" style={{ fontSize: '0.825rem', fontWeight: '800', color: '#475569', cursor: 'pointer' }}>
+                        🏆 Show Leaderboard to Students
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <input type="checkbox" id="perQuestionTimer" checked={tPerQuestionTimerEnabled} onChange={e => setTPerQuestionTimerEnabled(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                      <label htmlFor="perQuestionTimer" style={{ fontSize: '0.825rem', fontWeight: '800', color: '#475569', cursor: 'pointer' }}>
+                        ⏱ Enable Per-Question Timer (Auto-disappear question after time expires)
+                      </label>
+                    </div>
+                    {tPerQuestionTimerEnabled && (
+                      <div style={{ marginTop: '0.25rem', paddingLeft: '1.6rem' }}>
+                        <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.4rem' }}>TIME PER QUESTION (SECONDS)</label>
+                        <input type="number" min="5" max="3600" value={tPerQuestionTimeLimit} onChange={e => setTPerQuestionTimeLimit(Number(e.target.value))} className="input-field" placeholder="e.g. 60" required />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* ─── ACCESS CONTROL ─── */}

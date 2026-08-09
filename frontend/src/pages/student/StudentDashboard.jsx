@@ -113,7 +113,8 @@ const StudentDashboard = ({ tab }) => {
 
   const getActiveTasks = () => {
     if (!user) return [];
-    return days.flatMap(d => d.tasks.filter(t => t.status === 'running' && isTaskAccessible(t)));
+    const tasks = days.flatMap(d => d.tasks.filter(t => t.status === 'running' && isTaskAccessible(t)));
+    return tasks.sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
   };
   const getCompletedTasks = () => {
     const bestMap = new Map();
@@ -198,9 +199,11 @@ const StudentDashboard = ({ tab }) => {
                             <span style={{ color: '#999', fontSize: '0.8rem' }}>on {new Date(task.createdAt).toLocaleDateString()}</span>
                          </div>
                          <div style={{ display: 'flex', gap: '0.75rem' }}>
-                            <button style={{ background: 'transparent', color: '#64748b', border: '1px solid #cbd5e1', padding: '0.6rem 1.25rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }} onClick={() => handleShowPeople(task._id, task.title)}>
-                              🏆 LEADERBOARD
-                            </button>
+                            {task.showLeaderboard !== false && (
+                              <button style={{ background: 'transparent', color: '#64748b', border: '1px solid #cbd5e1', padding: '0.6rem 1.25rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }} onClick={() => handleShowPeople(task._id, task.title)}>
+                                🏆 LEADERBOARD
+                              </button>
+                            )}
                             {task.questions && task.questions[0]?.type === 'SQL' ? (
                                <button style={{ background: '#0e7490', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => { setAttemptTask(task); setAttemptPath(`/student/sql/${task._id}`); }}>OPEN EDITOR</button>
                             ) : (task.questions && (task.questions[0]?.type === 'Jumble' || (task.questions.some(q => q.type === 'Jumble') && task.questions.some(q => q.type === 'MCQ')))) ? (
@@ -252,9 +255,11 @@ const StudentDashboard = ({ tab }) => {
                                  <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9rem' }}>{task.title}</div>
                                </div>
                                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                                 <button style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }} onClick={(e) => { e.stopPropagation(); handleShowPeople(task._id, task.title); }}>
-                                    🏆 RANK
-                                 </button>
+                                 {task.showLeaderboard !== false && (
+                                   <button style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }} onClick={(e) => { e.stopPropagation(); handleShowPeople(task._id, task.title); }}>
+                                      🏆 RANK
+                                   </button>
+                                 )}
                                  <span style={{ fontSize: '0.68rem', color: task.status === 'running' ? '#16a34a' : '#94a3b8', fontWeight: '800', textTransform: 'uppercase', border: `1px solid ${task.status === 'running' ? '#bbf7d0' : '#e2e8f0'}`, padding: '0.2rem 0.5rem', borderRadius: '4px', background: task.status === 'running' ? '#f0fdf4' : '#f8fafc' }}>{task.status}</span>
                                </div>
                             </div>
@@ -289,12 +294,14 @@ const StudentDashboard = ({ tab }) => {
                       </td>
                       <td style={{ textAlign: 'center', color: '#777' }}>{new Date(att.updatedAt).toLocaleDateString()}</td>
                       <td style={{ textAlign: 'right', paddingRight: '2rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                          <button 
-                              onClick={() => handleShowPeople(att.exam?._id || att.exam, att.exam?.title)} 
-                              style={{ background: 'transparent', border: 'none', color: '#f59e0b', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}
-                          >
-                              🏆 Rank
-                          </button>
+                          {att.exam?.showLeaderboard !== false && (
+                            <button 
+                                onClick={() => handleShowPeople(att.exam?._id || att.exam, att.exam?.title)} 
+                                style={{ background: 'transparent', border: 'none', color: '#f59e0b', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}
+                            >
+                                🏆 Rank
+                            </button>
+                          )}
                           <button 
                               onClick={() => navigate(
                                 att.exam?.questions?.[0]?.type === 'SQL' ? `/student/sql/${att.exam?._id}` :

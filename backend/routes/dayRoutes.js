@@ -20,7 +20,7 @@ router.post('/', requireAdmin, async (req, res) => {
 router.get('/', requireAuth, async (req, res) => {
     try {
         const days = await Day.find().sort({ dayNumber: 1 }).lean();
-        const ex = await Exam.find({ isDeleted: { $ne: true } }).lean();
+        const ex = await Exam.find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 }).lean();
         
         console.log(`Mapping ${ex.length} active exams into ${days.length} days`);
         
