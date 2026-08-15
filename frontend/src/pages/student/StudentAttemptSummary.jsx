@@ -10,43 +10,45 @@ const StudentAttemptSummary = () => {
   const [attempts, setAttempts] = useState([]);
   const [exam, setExam] = useState(null);
   const [loading, setLoading] = useState(true);
-  
   const [attemptTask, setAttemptTask] = useState(null);
   const [attemptPath, setAttemptPath] = useState('');
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const user = JSON.parse(localStorage.getItem('user')) || {};
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (!user) { navigate('/'); return; }
+    if (!user || !user.id) { navigate('/'); return; }
 
     const fetchData = async () => {
       try {
-        const examRes = await fetch(`${API_BASE_URL}/api/exams`);
-        const allExams = await examRes.json();
-        const currentExam = allExams.find(e => e._id === examId);
-        if (currentExam) setExam(currentExam);
+        const examRes = await fetch(`${API_BASE_URL}/api/exams/${examId}`);
+        const currentExam = await examRes.json();
+        if (currentExam && currentExam._id) setExam(currentExam);
 
         const attemptRes = await fetch(`${API_BASE_URL}/api/attempts/exam/${examId}/student/${user.id}`);
         const attemptData = await attemptRes.json();
-        setAttempts(attemptData);
+        setAttempts(Array.isArray(attemptData) ? attemptData : []);
       } catch (err) { console.error(err); } finally { setLoading(false); }
     };
     fetchData();
   }, [examId, navigate]);
 
-  if (loading) return <div className="moodle-container" style={{ textAlign: 'center', marginTop: '4rem' }}>Loading Summary...</div>;
-  if (!exam) return <div className="moodle-container" style={{ textAlign: 'center', marginTop: '4rem' }}>Exam not found.</div>;
-
   const calculateGrade = (att) => {
+    if (!exam) return "0.00";
     const max = (att.maxScore && att.maxScore > 1) ? att.maxScore : (exam.questions?.reduce((sum, q) => sum + (q.marks || (q.type === 'SQL' ? 100 : 1)), 0) || 1);
     const grade = (att.score / max) * 100;
-    return Math.min(grade, 100).toFixed(2); // Cap at 100%
+    return Math.min(grade, 100).toFixed(2);
   };
 
   const getHighestGrade = () => {
-    if (attempts.length === 0) return "0.00";
+    if (!attempts || attempts.length === 0) return "0.00";
     const grades = attempts.map(a => parseFloat(calculateGrade(a)));
     return Math.max(...grades).toFixed(2);
   };
+
+  if (loading) return <div className="moodle-container" style={{ textAlign: 'center', marginTop: '4rem' }}>Loading Summary...</div>;
+  if (!exam) return <div className="moodle-container" style={{ textAlign: 'center', marginTop: '4rem' }}>Assessment Record Not Found.</div>;
+
+  const highestGradeNum = parseFloat(getHighestGrade());
 
   return (
     <div className="moodle-container" style={{ padding: '2rem' }}>
@@ -60,12 +62,36 @@ const StudentAttemptSummary = () => {
       <div style={{ background: 'var(--surface-color)', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '2rem', marginBottom: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: '900', marginBottom: '2rem', color: 'var(--text-primary)', textAlign: 'center' }}>Official Attempt Records</h2>
         
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginBottom: '3rem' }}>
-           <div style={{ textAlign: 'center', padding: '1.5rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', minWidth: '240px' }}>
-              <div style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase', marginBottom: '1rem', letterSpacing: '1px' }}>CERTIFIED HIGHEST GRADE</div>
-              <div style={{ fontSize: '3rem', fontWeight: '900', color: '#f36d44' }}>{getHighestGrade()}</div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem' }}>Calculated from {attempts.length} authorized attempts</div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', marginBottom: '3rem' }}>
+           <div style={{ textAlign: 'center', padding: '1.5rem 2.5rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', minWidth: '280px' }}>
+              <div style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '1px' }}>CERTIFIED HIGHEST GRADE</div>
+              <div style={{ fontSize: '3.2rem', fontWeight: '900', color: highestGradeNum >= 80 ? '#16a34a' : '#f36d44' }}>{getHighestGrade()}%</div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>Calculated from {attempts.length} authorized attempts</div>
            </div>
+
+           {highestGradeNum >= 80 && (
+             <button
+               onClick={() => setShowCertificateModal(true)}
+               style={{
+                 background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                 color: 'white',
+                 border: 'none',
+                 padding: '0.85rem 2rem',
+                 borderRadius: '12px',
+                 fontWeight: '900',
+                 fontSize: '1rem',
+                 cursor: 'pointer',
+                 display: 'flex',
+                 alignItems: 'center',
+                 gap: '0.6rem',
+                 boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)',
+                 transition: 'transform 0.2s'
+               }}
+             >
+               <Award size={22} />
+               <span>DOWNLOAD CERTIFICATE OF ACHIEVEMENT</span>
+             </button>
+           )}
         </div>
 
         <table className="moodle-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -137,9 +163,76 @@ const StudentAttemptSummary = () => {
             )}
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
                <button onClick={() => setAttemptTask(null)} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: 'var(--surface-color)', color: '#475569', fontWeight: 'bold', cursor: 'pointer' }}>CANCEL</button>
-               {attemptTask.notes && <button onClick={() => {}} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>STUDY</button>}
-               <button onClick={() => { navigate(attemptPath); setAttemptTask(null); }} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>ATTEMPT</button>
+               {attemptTask.notes && <button onClick={() => {
+                   if (attemptTask.notes.startsWith('http')) { window.open(attemptTask.notes, '_blank'); }
+                   else { const win = window.open('', '_blank'); win.document.write(`<pre style="font-family: sans-serif; padding: 2rem; font-size: 1.2rem; white-space: pre-wrap;">${attemptTask.notes}</pre>`); }
+               }} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>STUDY IN NEW TAB</button>}
+               <button onClick={() => { window.open(attemptPath, '_blank'); setAttemptTask(null); }} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>START REATTEMPT ▶</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Certificate Modal ─── */}
+      {showCertificateModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: '#ffffff', color: '#071125', borderRadius: '16px', maxWidth: '750px', width: '100%', padding: '2.5rem', boxShadow: '0 25px 50px rgba(0,0,0,0.3)', position: 'relative', border: '8px solid #071125' }}>
+            
+            <div style={{ border: '2px solid #d97706', padding: '2rem', textAlign: 'center', borderRadius: '8px', background: '#fafaf9' }}>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <div style={{ fontWeight: '900', fontSize: '1.2rem', color: '#f97316', letterSpacing: '1px' }}>SMART QUIZ PRO</div>
+                <div style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', padding: '0.35rem 0.85rem', borderRadius: '20px', fontWeight: '900', fontSize: '0.72rem', letterSpacing: '1px' }}>
+                  VERIFIED CERTIFICATE
+                </div>
+              </div>
+
+              <Award size={52} color="#d97706" style={{ marginBottom: '0.75rem' }} />
+              
+              <h1 style={{ fontFamily: 'serif', fontSize: '2rem', fontWeight: '900', color: '#071125', margin: '0 0 0.5rem 0', letterSpacing: '2px', textTransform: 'uppercase' }}>
+                Certificate of Achievement
+              </h1>
+              
+              <p style={{ color: '#64748b', fontSize: '0.88rem', fontStyle: 'italic', marginBottom: '1.25rem' }}>
+                This is to certify that
+              </p>
+
+              <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#071125', borderBottom: '2px solid #cbd5e1', display: 'inline-block', paddingBottom: '0.25rem', marginBottom: '1rem', letterSpacing: '0.5px' }}>
+                {user?.name?.toUpperCase() || 'STUDENT'} {user?.roll_no ? `(${user.roll_no})` : ''}
+              </h2>
+
+              <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+                has successfully demonstrated academic excellence and scored <strong style={{ color: '#16a34a', fontSize: '1.2rem' }}>{highestGradeNum}%</strong> in the assessment:
+              </p>
+
+              <h3 style={{ fontSize: '1.3rem', fontWeight: '900', color: '#6366f1', marginBottom: '2rem' }}>
+                "{exam?.title}"
+              </h3>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '2rem', paddingTop: '1.25rem', borderTop: '1px dashed #cbd5e1' }}>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '800' }}>VERIFICATION CODE</div>
+                  <div style={{ fontSize: '0.85rem', fontFamily: 'monospace', fontWeight: '900', color: '#071125' }}>
+                    SQ-CERT-{(exam?._id || '12345678').slice(-8).toUpperCase()}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '0.2rem' }}>Issued on: {new Date().toLocaleDateString()}</div>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontFamily: 'cursive', fontSize: '1.3rem', fontWeight: 'bold', color: '#071125', marginBottom: '-0.2rem' }}>SmartQuiz Academic Board</div>
+                  <div style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748b', borderTop: '1px solid #94a3b8', paddingTop: '0.2rem' }}>OFFICIAL ASSESSMENT SEAL</div>
+                </div>
+              </div>
+
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
+              <button onClick={() => setShowCertificateModal(false)} style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#475569', fontWeight: '800', cursor: 'pointer' }}>Close</button>
+              <button onClick={() => window.print()} style={{ padding: '0.6rem 1.5rem', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' }}>
+                🖨️ Print / Save PDF
+              </button>
+            </div>
+
           </div>
         </div>
       )}

@@ -17,25 +17,129 @@ import './App.css';
 import SimpleChatbot from './pages/student/SimpleChatbot';
 import { useAuth } from './contexts/AuthContext';
 import { AdminProtectedRoute, StudentProtectedRoute } from './components/ProtectedRoute';
-import { Moon, Sun } from 'lucide-react';
-
-/* ─────────── Dark Mode Toggle Removed ─────────── */
+import { Moon, Sun, LogOut, ShieldCheck, LayoutDashboard, BarChart3, GraduationCap, Users, Layers, FileText } from 'lucide-react';
 
 /* ─────────── Admin Layout ─────────── */
 const AdminLayout = (props) => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const location = useLocation();
+
+  const query = new URLSearchParams(location.search);
+  const currentTab = query.get('tab') || 'Days';
+
+  const navItems = [
+    { label: 'Dashboard', icon: <LayoutDashboard size={18} />, to: '/admin' },
+    { label: 'Analytics', icon: <BarChart3 size={18} />, to: '/admin/analytics' },
+    { label: 'Resource Hub', icon: <Layers size={18} />, to: '/admin?tab=Resource+Hub' },
+    { label: 'Students', icon: <Users size={18} />, to: '/admin?tab=Students' },
+    { label: 'Groups', icon: <Layers size={18} />, to: '/admin?tab=Groups' },
+    { label: 'Reports', icon: <FileText size={18} />, to: '/admin?tab=Reports' },
+    { label: 'Admins', icon: <ShieldCheck size={18} />, to: '/admin?tab=Admins' }
+  ];
+
   return (
-  <div className="app-container">
-    <nav className="sidebar">
-      <div className="brand" style={{ background: '#0f172a', color: 'white', padding: '1.5rem', fontWeight: '900', fontStyle: 'italic', letterSpacing: '1px', fontSize: '1.5rem' }}>SMART QUIZ</div>
-      <ul className="nav-links">
-        <li><Link to="/admin">Dashboard</Link></li>
-        <li><Link to="/admin/analytics">Analytics</Link></li>
-        <li style={{ color: 'var(--danger-color)', marginTop: '2rem', cursor: 'pointer' }} onClick={() => logout()}>Logout</li>
-      </ul>
-    </nav>
-    <main className="main-content">{props.children}</main>
-  </div>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', background: 'var(--bg-color)', overflow: 'hidden' }}>
+      {/* ── Left Sidebar Navigation ── */}
+      <aside className="admin-sidebar" style={{
+        width: '260px',
+        background: '#071125',
+        color: 'white',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        padding: '1.5rem 1.25rem',
+        borderRight: '1px solid rgba(255,255,255,0.08)',
+        zIndex: 100,
+        flexShrink: 0
+      }}>
+        <div>
+          {/* Brand Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem', paddingLeft: '0.5rem' }}>
+            <div style={{ width: 38, height: 38, borderRadius: '10px', background: 'linear-gradient(135deg, #f97316, #ea580c)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', boxShadow: '0 4px 12px rgba(249,115,22,0.4)' }}>
+              <GraduationCap size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.15rem', fontWeight: '900', letterSpacing: '0.5px', color: 'white', lineHeight: 1.1 }}>
+                SMART QUIZ <span style={{ color: '#f97316', fontSize: '0.7rem', verticalAlign: 'super' }}>PRO</span>
+              </div>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: '600' }}>Admin Control</div>
+            </div>
+          </div>
+
+          {/* Sidebar Nav Links */}
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            {navItems.map(item => {
+              const isPathActive = item.to === '/admin' ? (location.pathname === '/admin' && (currentTab === 'Days' || !location.search)) :
+                item.to === '/admin/analytics' ? location.pathname === '/admin/analytics' :
+                (location.pathname === '/admin' && location.search.includes(item.label.replace(' ', '+')));
+
+              return (
+                <Link
+                  key={item.label}
+                  to={item.to}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.85rem',
+                    padding: '0.75rem 1rem',
+                    borderRadius: '12px',
+                    color: isPathActive ? '#ffffff' : '#94a3b8',
+                    background: isPathActive ? 'linear-gradient(135deg, #f97316, #ea580c)' : 'transparent',
+                    textDecoration: 'none',
+                    fontWeight: isPathActive ? '800' : '600',
+                    fontSize: '0.88rem',
+                    boxShadow: isPathActive ? '0 4px 14px rgba(249,115,22,0.35)' : 'none',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Bottom Status Banner & Logout Button */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '1rem', color: 'white' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: '800', marginBottom: '0.25rem' }}>🏆 Great job!</div>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8', lineHeight: 1.3 }}>Your system is running smoothly.</div>
+            <div style={{ width: '100%', background: 'rgba(255,255,255,0.1)', height: '4px', borderRadius: '2px', marginTop: '0.65rem', overflow: 'hidden' }}>
+              <div style={{ width: '100%', background: '#f97316', height: '100%' }}></div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => logout()}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.6rem',
+              padding: '0.75rem',
+              background: 'rgba(239,68,68,0.12)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: '12px',
+              color: '#fca5a5',
+              fontWeight: '800',
+              fontSize: '0.88rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <LogOut size={18} color="#ef4444" />
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ── Main Content Area ── */}
+      <main className="main-content" style={{ flex: 1, height: '100vh', overflowY: 'auto', background: 'var(--bg-color)' }}>
+        {props.children}
+      </main>
+    </div>
   );
 };
 
@@ -187,43 +291,148 @@ const StudentLayout = (props) => {
     } catch(e) { alert('Error submitting feedback'); }
   };
 
-  const navLink = (to, label) => ({
-    style: {
-      color: 'white', textDecoration: 'none',
-      borderBottom: path === to || (to !== '/student' && path.startsWith(to)) ? '2px solid #f36d44' : 'none',
-      paddingBottom: '4px', fontSize: '0.875rem', fontWeight: '600', whiteSpace: 'nowrap'
-    }
-  });
+  const isNavActive = (to) => {
+    if (to === '/student') return path === '/student' || path === '/student/';
+    return path.startsWith(to);
+  };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <nav style={{ display: hideLayout ? 'none' : 'flex', background: '#071125', color: 'white', padding: '0.85rem 2rem', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.25)', position: 'sticky', top: 0, zIndex: 1000 }}>
+      {/* ── Modern Top Navbar ── */}
+      <nav style={{
+        display: hideLayout ? 'none' : 'flex',
+        background: '#071125',
+        color: 'white',
+        padding: '0.75rem 2rem',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 1000,
+        borderBottom: '1px solid rgba(255,255,255,0.08)'
+      }}>
+        {/* Left Brand & Nav Links */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <div style={{ background: 'white', padding: '0.3rem 0.7rem', borderRadius: '4px' }}>
-            <span style={{ color: '#000', fontWeight: '900', fontStyle: 'italic', fontSize: '1.2rem' }}>SMART QUIZ</span>
-          </div>
-          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-            <Link to="/student" {...navLink('/student', 'Dashboard')}>Dashboard</Link>
-            <Link to="/student/assignments" {...navLink('/student/assignments', 'Assignments')}>Assignments</Link>
-            <Link to="/student/completed" {...navLink('/student/completed', 'Completed Tasks')}>Completed</Link>
-            <Link to="/student/reports" {...navLink('/student/reports', 'Reports')}>Reports</Link>
-            <Link to="/student/profile" {...navLink('/student/profile', 'Profile')}>Profile</Link>
-            <button onClick={() => setShowFeedback(true)} style={{ background: 'none', border: 'none', color: '#f36d44', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>Give Feedback</button>
+          {/* Brand Badge */}
+          <Link to="/student" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
+            <div style={{
+              width: 38,
+              height: 38,
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #f97316, #ea580c)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(249,115,22,0.4)'
+            }}>
+              <GraduationCap size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.15rem', fontWeight: '900', letterSpacing: '0.5px', color: 'white', lineHeight: 1.1 }}>
+                SMART QUIZ <span style={{ color: '#f97316', fontSize: '0.7rem', verticalAlign: 'super' }}>PRO</span>
+              </div>
+              <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: '600' }}>Student Portal</div>
+            </div>
+          </Link>
+
+          {/* Navigation Pill Links */}
+          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+            {[
+              { to: '/student', label: 'Dashboard' },
+              { to: '/student/assignments', label: 'Assignments' },
+              { to: '/student/completed', label: 'Completed' },
+              { to: '/student/reports', label: 'Reports' },
+              { to: '/student/profile', label: 'Profile' },
+            ].map(item => {
+              const active = isNavActive(item.to);
+              return (
+                <Link
+                  key={item.label}
+                  to={item.to}
+                  style={{
+                    color: active ? '#ffffff' : '#cbd5e1',
+                    background: active ? 'linear-gradient(135deg, #f97316, #ea580c)' : 'transparent',
+                    textDecoration: 'none',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '10px',
+                    fontSize: '0.88rem',
+                    fontWeight: active ? '800' : '600',
+                    boxShadow: active ? '0 4px 12px rgba(249,115,22,0.35)' : 'none',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+            <button
+              onClick={() => setShowFeedback(true)}
+              style={{
+                background: 'rgba(249,115,22,0.12)',
+                border: '1px solid rgba(249,115,22,0.3)',
+                color: '#f97316',
+                cursor: 'pointer',
+                fontWeight: '800',
+                fontSize: '0.82rem',
+                padding: '0.5rem 0.9rem',
+                borderRadius: '10px',
+                marginLeft: '0.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}
+            >
+              💬 Feedback
+            </button>
           </div>
         </div>
+
+        {/* Right User & Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
           {user && <NotificationBell userId={user.id} />}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: user?.avatar_color || '#f36d44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '0.75rem', color: 'white' }}>
-              {user?.name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '??'}
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', background: 'rgba(255,255,255,0.06)', padding: '0.35rem 0.85rem', borderRadius: '30px', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #f97316, #ea580c)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: '900',
+              fontSize: '0.8rem',
+              color: 'white',
+              boxShadow: '0 2px 8px rgba(249,115,22,0.4)'
+            }}>
+              {user?.name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'S'}
             </div>
-            <span style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.8)', fontWeight: '600' }}>{user?.name}</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '0.82rem', color: '#ffffff', fontWeight: '800', lineHeight: 1.1 }}>{user?.name || 'Student'}</div>
+              <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: '600' }}>{user?.roll_no ? `Roll: ${user.roll_no}` : 'Student'}</div>
+            </div>
           </div>
+
           <button
             onClick={() => logout()}
-            style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', padding: '0.3rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700' }}
+            style={{
+              background: 'rgba(239,68,68,0.12)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              color: '#fca5a5',
+              padding: '0.5rem 1rem',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              fontSize: '0.82rem',
+              fontWeight: '800',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s'
+            }}
           >
-            Log out
+            <LogOut size={16} /> Logout
           </button>
         </div>
       </nav>

@@ -133,24 +133,14 @@ const StudentDashboard = ({ tab }) => {
   if (loading) return <div style={{ padding: '5rem', textAlign: 'center', color: '#64748b', background: '#f5f5f5' }}>Loading...</div>;
 
   return (
-    <div style={{ background: '#f5f5f5', minHeight: '90vh', paddingBottom: '3rem' }}>
-      
-      {/* Action Row */}
-      <div style={{ padding: '1rem 2rem', display: 'flex', justifyContent: 'flex-end', maxWidth: '1240px', margin: '0 auto' }}>
-        <button onClick={fetchData} style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.4rem 1.25rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }}>
-          Refresh
-        </button>
-      </div>
-
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1rem' }}>
-        
+    <div style={{ background: '#f8fafc', minHeight: '90vh', padding: '1.5rem 2rem 3rem 2rem' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          
           {tab === 'Dashboard' && (
             <>
-              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', background: 'white', padding: '0.5rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                 <button onClick={() => setDashboardFilter('Unattempted')} style={{ flex: 1, padding: '0.75rem', borderRadius: '6px', fontWeight: 'bold', border: 'none', background: dashboardFilter === 'Unattempted' ? '#f36d44' : 'transparent', color: dashboardFilter === 'Unattempted' ? 'white' : '#64748b', cursor: 'pointer' }}>Unattempted</button>
-                 <button onClick={() => setDashboardFilter('Attempted')} style={{ flex: 1, padding: '0.75rem', borderRadius: '6px', fontWeight: 'bold', border: 'none', background: dashboardFilter === 'Attempted' ? '#16a34a' : 'transparent', color: dashboardFilter === 'Attempted' ? 'white' : '#64748b', cursor: 'pointer' }}>Attempted</button>
+              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', background: '#ffffff', padding: '0.45rem', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                 <button onClick={() => setDashboardFilter('Unattempted')} style={{ flex: 1, padding: '0.75rem', borderRadius: '10px', fontWeight: '800', border: 'none', background: dashboardFilter === 'Unattempted' ? 'linear-gradient(135deg, #f36d44, #e0542b)' : 'transparent', color: dashboardFilter === 'Unattempted' ? 'white' : '#64748b', cursor: 'pointer', fontSize: '0.88rem', boxShadow: dashboardFilter === 'Unattempted' ? '0 4px 14px rgba(243,109,68,0.35)' : 'none', transition: 'all 0.2s' }}>⚡ Unattempted Tasks</button>
+                 <button onClick={() => setDashboardFilter('Attempted')} style={{ flex: 1, padding: '0.75rem', borderRadius: '10px', fontWeight: '800', border: 'none', background: dashboardFilter === 'Attempted' ? 'linear-gradient(135deg, #10b981, #059669)' : 'transparent', color: dashboardFilter === 'Attempted' ? 'white' : '#64748b', cursor: 'pointer', fontSize: '0.88rem', boxShadow: dashboardFilter === 'Attempted' ? '0 4px 14px rgba(16,185,129,0.35)' : 'none', transition: 'all 0.2s' }}>✓ Attempted & Completed</button>
               </div>
               {(() => {
                 const filteredTasks = getActiveTasks().filter(task => {
@@ -161,67 +151,133 @@ const StudentDashboard = ({ tab }) => {
                 return filteredTasks.length > 0 ? filteredTasks.map(task => {
                 const att = getAttempt(task._id);
                 const isCompleted = att?.status === 'completed';
+                const qType = task.questions?.[0]?.type;
+                const isMixed = task.questions?.some(q => q.type === 'MCQ') && task.questions?.some(q => q.type === 'Jumble');
+                const typeLabel = qType === 'SQL' ? 'SQL Query' : isMixed ? 'Mixed Assessment' : qType === 'Coding' ? 'Lab Exam' : qType === 'Jumble' ? 'Jumble Puzzle' : 'Multiple Choice';
+                const gradientBg = qType === 'SQL' ? 'linear-gradient(135deg, #0e7490, #155e75)' : isMixed || qType === 'Jumble' ? 'linear-gradient(135deg, #7c3aed, #6d28d9)' : qType === 'Coding' ? 'linear-gradient(135deg, #2563eb, #1d4ed8)' : 'linear-gradient(135deg, #f36d44, #e0542b)';
+                
+                const totalMarks = isMixed || qType === 'MCQ' || qType === 'Jumble'
+                  ? task.questions?.reduce((s, q) => s + (q.marks || 1), 0)
+                  : qType === 'SQL' ? 100 : task.questions?.length || 1;
 
                 return (
-                  <div key={task._id} style={{ background: 'var(--surface-color)', border: '1px solid #ddd', borderRadius: '4px', padding: '1.25rem', display: 'flex', gap: '1.5rem', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
-                    {/* Left Frame Box */}
-                    <div style={{ width: '200px', flexShrink: 0, padding: '4px', background: '#ddd', borderRadius: '4px' }}>
-                       <div style={{ background: '#1a1a1a', height: '120px', borderRadius: '2px', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', border: '1px solid #000' }}>
-                          <div style={{ color: '#ccc', fontSize: '0.75rem', fontWeight: 'bold' }}>QUIZ</div>
-                          <div style={{ background: '#222', width: '100%', padding: '0.5rem', position: 'absolute', bottom: 0, left: 0, textAlign: 'center', color: 'white', fontWeight: 'bold', fontSize: '0.8rem', borderTop: '1px solid #444' }}>
-                            {task.questions && (task.questions[0]?.type === 'SQL' ? 'SQL' : task.questions.some(q => q.type === 'Jumble') && task.questions.some(q => q.type === 'MCQ') ? 'MIXED' : task.questions[0]?.type === 'Coding' ? 'LAB' : task.questions[0]?.type === 'Jumble' ? 'JUMBLE' : 'QUIZ')}
-                          </div>
-                          <div style={{ color: 'white' }}><BookOpen size={40} /></div>
-                       </div>
+                  <div key={task._id} style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '16px',
+                    padding: '1.25rem',
+                    display: 'flex',
+                    gap: '1.5rem',
+                    alignItems: 'center',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.04)',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}>
+                    {/* Left Frame Badge */}
+                    <div style={{
+                      width: '140px',
+                      height: '110px',
+                      flexShrink: 0,
+                      background: gradientBg,
+                      borderRadius: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      color: 'white',
+                      boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+                      position: 'relative'
+                    }}>
+                       <BookOpen size={36} color="rgba(255,255,255,0.95)" />
+                       <span style={{ fontSize: '0.72rem', fontWeight: '900', letterSpacing: '0.5px', marginTop: '0.4rem', textTransform: 'uppercase', background: 'rgba(0,0,0,0.25)', padding: '0.2rem 0.65rem', borderRadius: '20px' }}>
+                          {qType === 'SQL' ? 'SQL' : isMixed ? 'MIXED' : qType === 'Coding' ? 'LAB' : qType === 'Jumble' ? 'JUMBLE' : 'QUIZ'}
+                       </span>
                     </div>
 
                     {/* Right Content */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.75rem' }}>
                        <div>
-                         <h2 style={{ fontSize: '1.75rem', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>{task.title}</h2>
-                         <div style={{ borderBottom: '1px solid #eee', marginBottom: '1rem' }}></div>
-                       </div>
-                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ color: isCompleted ? '#16a34a' : '#f36d44' }}><CheckCircle size={16} /></div>
-                             <span style={{ color: isCompleted ? '#16a34a' : '#f36d44', fontWeight: 'bold' }}>
-                                {isCompleted
-                                  ? (() => {
-                                      const qType = task.questions?.[0]?.type;
-                                      const isMixed = task.questions?.some(q => q.type === 'MCQ') && task.questions?.some(q => q.type === 'Jumble');
-                                      const total = isMixed || qType === 'MCQ' || qType === 'Jumble'
-                                        ? task.questions?.reduce((s, q) => s + (q.marks || 1), 0)
-                                        : qType === 'SQL' ? 100 : task.questions?.length || 1;
-                                      return `Completed (Score: ${att.score}/${total})`;
-                                    })()
-                                  : 'Started'}
-                             </span>
-                            <span style={{ color: '#999', fontSize: '0.8rem' }}>on {new Date(task.createdAt).toLocaleDateString()}</span>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                           <h2 style={{ fontSize: '1.45rem', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>{task.title}</h2>
+                           <span style={{
+                              fontSize: '0.68rem',
+                              fontWeight: '900',
+                              color: isCompleted ? '#16a34a' : '#f36d44',
+                              background: isCompleted ? '#f0fdf4' : '#fff7ed',
+                              border: `1px solid ${isCompleted ? '#bbf7d0' : '#ffedd5'}`,
+                              padding: '0.25rem 0.65rem',
+                              borderRadius: '20px',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px'
+                           }}>
+                              {isCompleted ? `✓ COMPLETED (${att.score}/${totalMarks})` : '⚡ LIVE NOW'}
+                           </span>
                          </div>
+
+                         {/* Metadata Pills */}
+                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '0.65rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '0.25rem 0.65rem', borderRadius: '8px', fontWeight: '700' }}>
+                               📝 {typeLabel}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '0.25rem 0.65rem', borderRadius: '8px', fontWeight: '700' }}>
+                               ⏱ {task.time_limit || 30} Mins
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '0.25rem 0.65rem', borderRadius: '8px', fontWeight: '700' }}>
+                               ❓ {task.questions?.length || 0} Questions
+                            </span>
+                         </div>
+                       </div>
+
+                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.6rem', borderTop: '1px solid #f1f5f9' }}>
+                         <span style={{ color: '#94a3b8', fontSize: '0.75rem', fontWeight: '600' }}>
+                            📅 Added on {new Date(task.createdAt).toLocaleDateString()}
+                         </span>
+
                          <div style={{ display: 'flex', gap: '0.75rem' }}>
                             {task.showLeaderboard !== false && (
-                              <button style={{ background: 'transparent', color: '#64748b', border: '1px solid #cbd5e1', padding: '0.6rem 1.25rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }} onClick={() => handleShowPeople(task._id, task.title)}>
-                                🏆 LEADERBOARD
-                              </button>
+                               <button
+                                 style={{
+                                   background: '#fffbeb',
+                                   color: '#d97706',
+                                   border: '1px solid #fde68a',
+                                   padding: '0.6rem 1.1rem',
+                                   borderRadius: '10px',
+                                   fontWeight: '800',
+                                   cursor: 'pointer',
+                                   fontSize: '0.85rem',
+                                   display: 'flex',
+                                   alignItems: 'center',
+                                   gap: '0.35rem',
+                                   transition: 'all 0.2s'
+                                 }}
+                                 onClick={() => handleShowPeople(task._id, task.title)}
+                               >
+                                 🏆 Leaderboard
+                               </button>
                             )}
+
                             {task.questions && task.questions[0]?.type === 'SQL' ? (
-                               <button style={{ background: '#0e7490', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => { setAttemptTask(task); setAttemptPath(`/student/sql/${task._id}`); }}>OPEN EDITOR</button>
+                               <button style={{ background: 'linear-gradient(135deg, #0e7490, #155e75)', color: 'white', border: 'none', padding: '0.6rem 1.75rem', borderRadius: '10px', fontWeight: '900', cursor: 'pointer', fontSize: '0.9rem', boxShadow: '0 4px 14px rgba(14,116,144,0.3)' }} onClick={() => { window.open(`/student/sql/${task._id}`, '_blank'); }}>OPEN EDITOR</button>
                             ) : (task.questions && (task.questions[0]?.type === 'Jumble' || (task.questions.some(q => q.type === 'Jumble') && task.questions.some(q => q.type === 'MCQ')))) ? (
-                                <button style={{ background: '#7c3aed', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => { if (isCompleted) { navigate(`/student/jumble/${task._id}`); } else { setAttemptTask(task); setAttemptPath(`/student/jumble/${task._id}`); } }}>
+                                <button style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: 'white', border: 'none', padding: '0.6rem 1.75rem', borderRadius: '10px', fontWeight: '900', cursor: 'pointer', fontSize: '0.9rem', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }} onClick={() => { if (isCompleted) { navigate(`/student/jumble/${task._id}`); } else { window.open(`/student/jumble/${task._id}`, '_blank'); } }}>
                                   {isCompleted ? 'VIEW RESULT' : task.questions.some(q => q.type === 'MCQ') ? 'START MIXED ▶' : 'ARRANGE ↕'}
                                 </button>
-                           ) : isCompleted ? (
-                              <button style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => navigate(`/student/summary/${task._id}`)}>VIEW RESULT</button>
-                            ) : (
-                               <button style={{ background: '#f36d44', color: 'white', border: 'none', padding: '0.6rem 2.5rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }} onClick={() => { setAttemptTask(task); setAttemptPath(`/student/quiz/${task._id}`); }}>ATTEMPT</button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                             ) : isCompleted ? (
+                                <>
+                                   <button style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', padding: '0.6rem 1.25rem', borderRadius: '10px', fontWeight: '900', cursor: 'pointer', fontSize: '0.85rem', boxShadow: '0 4px 14px rgba(16,185,129,0.3)' }} onClick={() => navigate(`/student/summary/${task._id}`)}>VIEW RESULT</button>
+                                   <button style={{ background: 'linear-gradient(135deg, #f36d44, #e0542b)', color: 'white', border: 'none', padding: '0.6rem 1.25rem', borderRadius: '10px', fontWeight: '900', cursor: 'pointer', fontSize: '0.85rem', boxShadow: '0 4px 14px rgba(243,109,68,0.35)' }} onClick={() => { window.open(qType === 'SQL' ? `/student/sql/${task._id}` : (isMixed || qType === 'Jumble') ? `/student/jumble/${task._id}` : `/student/quiz/${task._id}`, '_blank'); }}>🔄 REATTEMPT ▶</button>
+                                </>
+                              ) : (
+                                <button style={{ background: 'linear-gradient(135deg, #f36d44, #e0542b)', color: 'white', border: 'none', padding: '0.6rem 2rem', borderRadius: '10px', fontWeight: '900', cursor: 'pointer', fontSize: '0.9rem', boxShadow: '0 4px 14px rgba(243,109,68,0.35)' }} onClick={() => { window.open(`/student/quiz/${task._id}`, '_blank'); }}>ATTEMPT NOW ▶</button>
+                             )}
+                         </div>
+                       </div>
                     </div>
-                  );
-                }) : (
-                <div style={{ padding: '6rem', textAlign: 'center', background: 'var(--surface-color)', borderRadius: '4px', color: '#bbb', border: '1px dashed #ddd' }}>No {dashboardFilter.toLowerCase()} active tasks for now</div>
+                  </div>
+                );
+              }) : (
+                <div style={{ padding: '5rem 2rem', textAlign: 'center', background: '#ffffff', borderRadius: '16px', color: '#94a3b8', border: '2px dashed #cbd5e1', fontWeight: '700' }}>No {dashboardFilter.toLowerCase()} active tasks available</div>
               );})()}
             </>
           )}
@@ -233,15 +289,15 @@ const StudentDashboard = ({ tab }) => {
                    if (visibleTasks.length === 0) return null;
                    const isOpen = !!expandedDays[day._id];
                    return (
-                   <div key={day._id} style={{ background: 'var(--surface-color)', border: '1px solid #ddd', borderRadius: '6px', overflow: 'hidden' }}>
+                   <div key={day._id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
                       {/* Day Header — click to toggle */}
                       <div
                         onClick={() => setExpandedDays(prev => ({ ...prev, [day._id]: !prev[day._id] }))}
-                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.9rem 1.25rem', cursor: 'pointer', background: isOpen ? '#f8fafc' : 'white', borderBottom: isOpen ? '1px solid #eee' : 'none', userSelect: 'none' }}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.35rem', cursor: 'pointer', background: isOpen ? '#f8fafc' : '#ffffff', borderBottom: isOpen ? '1px solid #e2e8f0' : 'none', userSelect: 'none' }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          <span style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.95rem' }}>Day {day.dayNumber}: {day.title}</span>
-                          <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#64748b', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: '700' }}>{visibleTasks.length} task{visibleTasks.length !== 1 ? 's' : ''}</span>
+                          <span style={{ fontWeight: '800', color: '#0f172a', fontSize: '0.95rem' }}>Day {day.dayNumber}: {day.title}</span>
+                          <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#f36d44', padding: '0.15rem 0.55rem', borderRadius: '6px', fontWeight: '800' }}>{visibleTasks.length} task{visibleTasks.length !== 1 ? 's' : ''}</span>
                         </div>
                         <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
                       </div>
@@ -249,18 +305,18 @@ const StudentDashboard = ({ tab }) => {
                       {isOpen && (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                           {visibleTasks.map((task, idx) => (
-                            <div key={task._id} style={{ padding: '0.85rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx < visibleTasks.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                            <div key={task._id} style={{ padding: '0.9rem 1.35rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx < visibleTasks.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                 <BookOpen size={16} color="#94a3b8" />
-                                 <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9rem' }}>{task.title}</div>
+                                 <BookOpen size={16} color="#f36d44" />
+                                 <div style={{ fontWeight: '700', color: '#0f172a', fontSize: '0.9rem' }}>{task.title}</div>
                                </div>
                                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                                  {task.showLeaderboard !== false && (
-                                   <button style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }} onClick={(e) => { e.stopPropagation(); handleShowPeople(task._id, task.title); }}>
+                                   <button style={{ background: 'none', border: 'none', color: '#d97706', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }} onClick={(e) => { e.stopPropagation(); handleShowPeople(task._id, task.title); }}>
                                       🏆 RANK
                                    </button>
                                  )}
-                                 <span style={{ fontSize: '0.68rem', color: task.status === 'running' ? '#16a34a' : '#94a3b8', fontWeight: '800', textTransform: 'uppercase', border: `1px solid ${task.status === 'running' ? '#bbf7d0' : '#e2e8f0'}`, padding: '0.2rem 0.5rem', borderRadius: '4px', background: task.status === 'running' ? '#f0fdf4' : '#f8fafc' }}>{task.status}</span>
+                                 <span style={{ fontSize: '0.68rem', color: task.status === 'running' ? '#16a34a' : '#94a3b8', fontWeight: '800', textTransform: 'uppercase', border: `1px solid ${task.status === 'running' ? '#bbf7d0' : '#e2e8f0'}`, padding: '0.2rem 0.55rem', borderRadius: '6px', background: task.status === 'running' ? '#f0fdf4' : '#f8fafc' }}>{task.status}</span>
                                </div>
                             </div>
                           ))}
@@ -273,9 +329,9 @@ const StudentDashboard = ({ tab }) => {
           )}
 
           {tab === 'Reports' && (
-            <div style={{ background: 'var(--surface-color)', border: '1px solid #ddd', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ background: '#f36d44', color: 'white' }}>
+                <thead style={{ background: 'linear-gradient(135deg, #f36d44, #e0542b)', color: 'white' }}>
                   <tr>
                     <th style={{ padding: '1rem', textAlign: 'center' }}>S No</th>
                     <th style={{ textAlign: 'left' }}>Task Name</th>
@@ -286,18 +342,18 @@ const StudentDashboard = ({ tab }) => {
                 </thead>
                 <tbody>
                   {getCompletedTasks().map((att, idx) => (
-                    <tr key={att._id} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ textAlign: 'center', padding: '1rem' }}>{idx + 1}</td>
-                      <td style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{att.exam?.title}</td>
-                      <td style={{ textAlign: 'center', color: '#f36d44', fontWeight: 'bold' }}>
+                    <tr key={att._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ textAlign: 'center', padding: '1rem', color: '#64748b' }}>{idx + 1}</td>
+                      <td style={{ fontWeight: '700', color: '#0f172a' }}>{att.exam?.title}</td>
+                      <td style={{ textAlign: 'center', color: '#f36d44', fontWeight: '900' }}>
                           {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `${att.score} / 100` : `${att.score} / ${att.exam?.questions?.length || 1}`}
                       </td>
-                      <td style={{ textAlign: 'center', color: '#777' }}>{new Date(att.updatedAt).toLocaleDateString()}</td>
+                      <td style={{ textAlign: 'center', color: '#64748b' }}>{new Date(att.updatedAt).toLocaleDateString()}</td>
                       <td style={{ textAlign: 'right', paddingRight: '2rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                           {att.exam?.showLeaderboard !== false && (
                             <button 
                                 onClick={() => handleShowPeople(att.exam?._id || att.exam, att.exam?.title)} 
-                                style={{ background: 'transparent', border: 'none', color: '#f59e0b', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}
+                                style={{ background: 'transparent', border: 'none', color: '#d97706', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}
                             >
                                 🏆 Rank
                             </button>
@@ -308,7 +364,7 @@ const StudentDashboard = ({ tab }) => {
                                 (att.exam?.questions?.some(q => q.type === 'Jumble')) ? `/student/jumble/${att.exam?._id}` :
                                 `/student/summary/${att.exam?._id}`
                               )} 
-                              style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontWeight: 'bold', cursor: 'pointer' }}
+                              style={{ background: 'transparent', border: 'none', color: '#f36d44', fontWeight: 'bold', cursor: 'pointer' }}
                           >
                               {att.exam?.questions?.[0]?.type === 'SQL' ? 'Open Editor' : att.exam?.questions?.some(q => q.type === 'Jumble') ? 'Open Quiz' : 'View Report'}
                           </button>
@@ -323,17 +379,25 @@ const StudentDashboard = ({ tab }) => {
           {tab === 'Completed Tasks' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                {getCompletedTasks().map(att => (
-                 <div key={att._id} style={{ background: 'var(--surface-color)', padding: '1rem 1.5rem', borderRadius: '4px', border: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                 <div key={att._id} style={{ background: '#ffffff', padding: '1.25rem 1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                        <div style={{ color: '#16a34a' }}><CheckCircle size={20} /></div>
-                       <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{att.exam?.title} (Completed)</div>
+                       <div style={{ fontWeight: '700', color: '#0f172a' }}>{att.exam?.title} (Completed)</div>
                     </div>
-                    <button 
-                        style={{ background: '#f1f5f9', border: '1px solid #ddd', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', color: att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? '#0e7490' : '#333' }} 
-                        onClick={() => navigate(att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `/student/sql/${att.exam?._id}` : `/student/summary/${att.exam?._id}`)}
-                    >
-                        {att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? 'Open Editor' : att.exam?.questions && att.exam.questions[0]?.type === 'Jumble' ? 'Open Jumble' : 'Review Effort'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button 
+                            style={{ background: '#e0e7ff', border: '1px solid #c7d2fe', padding: '0.45rem 1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: '800', color: '#4338ca', fontSize: '0.8rem' }} 
+                            onClick={() => navigate(`/student/review/${att._id}`)}
+                        >
+                            🔍 Review Answers
+                        </button>
+                        <button 
+                            style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '0.45rem 1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: '800', color: '#475569', fontSize: '0.8rem' }} 
+                            onClick={() => navigate(att.exam?.questions && att.exam.questions[0]?.type === 'SQL' ? `/student/sql/${att.exam?._id}` : `/student/summary/${att.exam?._id}`)}
+                        >
+                            📊 View Summary
+                        </button>
+                    </div>
                  </div>
                ))}
             </div>
@@ -364,7 +428,7 @@ const StudentDashboard = ({ tab }) => {
                    if (attemptTask.notes.startsWith('http')) { window.open(attemptTask.notes, '_blank'); } 
                    else { const win = window.open('', '_blank'); win.document.write(`<pre style="font-family: sans-serif; padding: 2rem; font-size: 1.2rem; white-space: pre-wrap;">${attemptTask.notes}</pre>`); }
                }} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>STUDY IN NEW TAB</button>}
-               <button onClick={() => { navigate(attemptPath); setAttemptTask(null); }} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>ATTEMPT</button>
+               <button onClick={() => { window.open(attemptPath, '_blank'); setAttemptTask(null); }} style={{ padding: '0.6rem 1.5rem', borderRadius: '4px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>ATTEMPT</button>
             </div>
           </div>
         </div>

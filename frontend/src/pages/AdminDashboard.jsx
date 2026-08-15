@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import API_BASE_URL from '../config';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Plus, Users, BookOpen, Clock, AlertTriangle, X, Trash2, Play, Square,
   AreaChart, Download, FileText, UserCheck, CheckCircle, RefreshCcw,
   Filter, Send, HelpCircle, Edit3, Upload, User, Layers, ChevronDown,
-  ChevronRight, Eye, Settings, LogOut, Search, Megaphone, MessageSquare
+  ChevronRight, Eye, EyeOff, Settings, LogOut, Search, Megaphone, MessageSquare
 } from 'lucide-react';
 
 /* ─────────── Stat Card ─────────── */
@@ -43,14 +43,27 @@ const GROUP_COLORS = ['#3b82f6','#f36d44','#16a34a','#7c3aed','#dc2626','#d97706
 /* ══════════════════════════════════════════════════════════════════════ */
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   /* ─── Core State ─── */
   const [students, setStudents] = useState([]);
   const [days, setDays] = useState([]);
+  const [modulePage, setModulePage] = useState(1);
+  const MODULES_PER_PAGE = 5;
   const [reports, setReports] = useState([]);
   const [groups, setGroups] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminTab, setAdminTab] = useState('Days');
+
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const tabParam = queryParams.get('tab');
+    if (tabParam) {
+      setAdminTab(tabParam);
+    } else {
+      setAdminTab('Days');
+    }
+  }, [location.search]);
   const [resources, setResources] = useState([]);
   const [resourceFolders, setResourceFolders] = useState([]);
   const [showCloneModal, setShowCloneModal] = useState(false);
@@ -112,6 +125,7 @@ const AdminDashboard = () => {
   const [tShowLeaderboard, setTShowLeaderboard] = useState(true);
   const [tPerQuestionTimerEnabled, setTPerQuestionTimerEnabled] = useState(false);
   const [tPerQuestionTimeLimit, setTPerQuestionTimeLimit] = useState(60);
+  const [tScheduledLaunchAt, setTScheduledLaunchAt] = useState('');
 
   /* ─── Student / Profile states ─── */
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -333,6 +347,7 @@ const AdminDashboard = () => {
     setTShowLeaderboard(true);
     setTPerQuestionTimerEnabled(false);
     setTPerQuestionTimeLimit(60);
+    setTScheduledLaunchAt('');
     setShowTaskModal(true);
   };
 
@@ -348,6 +363,7 @@ const AdminDashboard = () => {
     setTShowLeaderboard(task.showLeaderboard !== undefined ? task.showLeaderboard : true);
     setTPerQuestionTimerEnabled(task.perQuestionTimerEnabled || false);
     setTPerQuestionTimeLimit(task.perQuestionTimeLimit !== undefined ? task.perQuestionTimeLimit : 60);
+    setTScheduledLaunchAt(task.scheduledLaunchAt ? new Date(task.scheduledLaunchAt).toISOString().slice(0, 16) : '');
     const au = task.allowedUsers || [];
     const ag = task.allowedGroups || [];
     setTAllowedUsers(au);
@@ -430,6 +446,7 @@ const AdminDashboard = () => {
           showLeaderboard: tShowLeaderboard,
           perQuestionTimerEnabled: tPerQuestionTimerEnabled,
           perQuestionTimeLimit: Number(tPerQuestionTimeLimit),
+          scheduledLaunchAt: tScheduledLaunchAt ? new Date(tScheduledLaunchAt) : null,
           questions,
           allowedUsers,
           allowedGroups
@@ -459,6 +476,25 @@ const AdminDashboard = () => {
     setPushingTask(task);
     setPushTargetFolder('');
     setShowPushModal(true);
+  };
+
+  const handleBulkTaskStatus = async (dayId, status) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/days/${dayId}/bulk-status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message);
+        fetchDays();
+      } else {
+        showToast(data.message || 'Failed to update module tasks', 'error');
+      }
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    }
   };
 
   const handlePushToResource = async (e) => {
@@ -803,18 +839,23 @@ const AdminDashboard = () => {
     s.section?.toLowerCase().includes(studentSearch.toLowerCase())
   );
 
+  /* ══════════ Task Counters ══════════ */
+  const totalTasks = days.reduce((acc, d) => acc + (d.tasks || []).length, 0);
+  const activeRunningTasks = days.reduce((acc, d) => acc + (d.tasks || []).filter(t => t.status === 'running').length, 0);
+  const inactiveTasks = totalTasks - activeRunningTasks;
+
   /* ══════════ Render ══════════ */
   return (
     <div className="page-container">
       {/* ─── Header ─── */}
-      <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+      <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '2.25rem', fontWeight: '900', letterSpacing: '-1.5px', color: 'var(--text-primary)', margin: 0 }}>
-            SMART QUIZ <span style={{ color: '#f36d44' }}>PRO</span>
+          <h1 style={{ fontSize: '2rem', fontWeight: '900', letterSpacing: '-0.5px', color: 'var(--text-primary)', margin: 0 }}>
+            Dashboard <span style={{ color: '#f97316' }}>Overview</span>
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>Enterprise Knowledge Assessment System</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: '0.2rem 0 0 0' }}>Monitor, manage and grow your knowledge assessment platform.</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn btn-outline" onClick={() => setShowNewsModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f59e0b', borderColor: '#f59e0b' }}>
             <Megaphone size={16} /> Manage News
           </button>
@@ -830,7 +871,7 @@ const AdminDashboard = () => {
           <button className="btn btn-outline" onClick={handleGlobalRefresh} title="Refresh All">
             <RefreshCcw size={16} />
           </button>
-          <button className="btn btn-outline" onClick={() => setShowDayModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button className="btn btn-primary" onClick={() => setShowDayModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'linear-gradient(135deg, #f97316, #ea580c)' }}>
             <Plus size={16} /> New Module
           </button>
           <button className="btn btn-outline" onClick={() => { setEditingStudent(null); setShowStudentModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -842,34 +883,30 @@ const AdminDashboard = () => {
         </div>
       </header>
 
-      {/* ─── Stat Cards ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
-        <StatCard icon={<Users />} title="Total Students" value={students.length} />
-        <StatCard icon={<Layers />} title="Groups" value={groups.length} color="#7c3aed" />
-        <StatCard icon={<AreaChart />} title="Assessments" value={reports.length} color="#3b82f6" />
-        <StatCard icon={<CheckCircle size={24} />} title="System" value="Healthy" color="#16a34a" />
-      </div>
-
-      {/* ─── Tab Nav ─── */}
-      <div style={{ marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '2rem' }}>
-        {['Days', 'Resource Hub', 'Students', 'Groups', 'Reports', 'Admins'].map(tab => (
-          <button key={tab} onClick={() => setAdminTab(tab)}
-            style={{ background: 'transparent', border: 'none', borderBottom: adminTab === tab ? '3px solid #f36d44' : 'none', padding: '0.75rem 0', fontWeight: 'bold', cursor: 'pointer', color: adminTab === tab ? '#f36d44' : '#64748b', fontSize: '1rem', transition: 'color 0.2s' }}>
-            {tab.toUpperCase()}
-          </button>
-        ))}
+      {/* ─── Task & System Stat Cards ─── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem', marginBottom: '2rem' }}>
+        <StatCard icon={<Users />} title="Total Students" value={students.length} color="#3b82f6" />
+        <StatCard icon={<Play size={22} />} title="Active Tasks (Running)" value={activeRunningTasks} color="#16a34a" />
+        <StatCard icon={<Square size={22} />} title="Inactive Tasks (Stopped)" value={inactiveTasks} color="#ea580c" />
+        <StatCard icon={<BookOpen size={22} />} title="Total Assessments" value={totalTasks} color="#7c3aed" />
       </div>
 
       {/* ══════════ DAYS TAB ══════════ */}
-      {adminTab === 'Days' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {days.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>
-              <BookOpen size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-              <div style={{ fontWeight: '700' }}>No modules yet — click "New Module" to get started</div>
-            </div>
-          )}
-          {days.map(day => {
+      {adminTab === 'Days' && (() => {
+        const totalModulePages = Math.ceil(days.length / MODULES_PER_PAGE) || 1;
+        const indexOfLastModule = modulePage * MODULES_PER_PAGE;
+        const indexOfFirstModule = indexOfLastModule - MODULES_PER_PAGE;
+        const currentModules = days.slice(indexOfFirstModule, indexOfLastModule);
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {days.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>
+                <BookOpen size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                <div style={{ fontWeight: '700' }}>No modules yet — click "New Module" to get started</div>
+              </div>
+            )}
+            {currentModules.map(day => {
             const isCollapsed = !expandedDays.has(day._id);
             return (
               <div key={day._id} style={{ borderRadius: '12px', border: '1px solid #e2e8f0', borderLeft: '5px solid #071125', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', background: 'var(--surface-color)' }}>
@@ -883,6 +920,8 @@ const AdminDashboard = () => {
                     <span style={{ fontSize: '0.65rem', fontWeight: '700', color: isCollapsed ? '#64748b' : 'rgba(255,255,255,0.6)', background: isCollapsed ? '#f1f5f9' : 'rgba(255,255,255,0.1)', padding: '0.15rem 0.5rem', borderRadius: '10px' }}>{(day.tasks || []).length} tasks</span>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }} onClick={e => e.stopPropagation()}>
+                    <button onClick={() => handleBulkTaskStatus(day._id, 'running')} style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '7px', padding: '0.4rem 0.75rem', fontSize: '0.72rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Play size={12} /> Launch All</button>
+                    <button onClick={() => handleBulkTaskStatus(day._id, 'stopped')} style={{ background: '#fff1f2', color: '#ef4444', border: '1px solid #fecdd3', borderRadius: '7px', padding: '0.4rem 0.75rem', fontSize: '0.72rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Square size={12} /> Stop All</button>
                     <button onClick={() => handleOpenTaskForDay(day._id)} style={{ background: 'linear-gradient(135deg,#f36d44,#e85d2f)', color: 'white', border: 'none', borderRadius: '7px', padding: '0.4rem 0.85rem', fontSize: '0.72rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Plus size={13} /> Add Task</button>
                     <button onClick={() => { setEditingDay(day); setDEditNum(day.dayNumber); setDEditTitle(day.title); setShowEditDayModal(true); }} style={{ background: isCollapsed ? 'white' : 'rgba(255,255,255,0.15)', color: isCollapsed ? '#064e8c' : 'white', border: isCollapsed ? '1px solid #cbd5e1' : '1px solid rgba(255,255,255,0.2)', borderRadius: '7px', padding: '0.4rem 0.75rem', fontSize: '0.72rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Edit3 size={13} /> Edit</button>
                     <button onClick={() => handleDeleteDay(day._id)} style={{ background: '#fee2e2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '7px', padding: '0.4rem 0.75rem', fontSize: '0.72rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Trash2 size={13} /> Delete</button>
@@ -895,16 +934,17 @@ const AdminDashboard = () => {
                   {(day.tasks || []).length === 0 ? (
                     <div style={{ padding: '1.5rem', color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic', textAlign: 'center', borderTop: '1px solid #f1f5f9' }}>No tasks yet — click "Add Task"</div>
                   ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead style={{ background: '#f8fafc' }}>
-                        <tr>
-                          <th style={{ padding: '0.6rem 1.5rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '900', textAlign: 'left' }}>TASK</th>
-                          <th style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '900' }}>TYPE</th>
-                          <th style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '900' }}>STATUS</th>
-                          <th style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '900' }}>ACCESS</th>
-                          <th style={{ textAlign: 'right', paddingRight: '1.5rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '900' }}>ACTIONS</th>
-                        </tr>
-                      </thead>
+                    <div style={{ width: '100%', overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
+                        <thead style={{ background: '#f8fafc' }}>
+                          <tr>
+                            <th style={{ padding: '0.75rem 1.5rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '900', textAlign: 'left', width: '36%' }}>TASK</th>
+                            <th style={{ padding: '0.75rem 1rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '900', width: '12%' }}>TYPE</th>
+                            <th style={{ padding: '0.75rem 1rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '900', width: '14%' }}>STATUS</th>
+                            <th style={{ padding: '0.75rem 1rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '900', width: '15%' }}>ACCESS</th>
+                            <th style={{ textAlign: 'right', paddingRight: '1.5rem', fontSize: '0.72rem', color: '#64748b', fontWeight: '900', width: '23%' }}>ACTIONS</th>
+                          </tr>
+                        </thead>
                       <tbody>
                         {(day.tasks || []).map(t => {
                           const qType = t.questions?.[0]?.type;
@@ -917,7 +957,14 @@ const AdminDashboard = () => {
                             <tr key={t._id} style={{ borderTop: '1px solid #f8fafc' }}>
                               <td style={{ paddingLeft: '1.5rem', paddingTop: '0.75rem', paddingBottom: '0.75rem', fontWeight: '700', color: 'var(--text-primary)' }}>{t.title}</td>
                               <td><span style={{ fontSize: '0.68rem', fontWeight: '800', color: '#5b21b6', background: '#f5f3ff', padding: '0.2rem 0.5rem', borderRadius: '5px' }}>{typeLabel}</span></td>
-                              <td><span style={{ fontSize: '0.68rem', fontWeight: '900', color: t.status === 'running' ? '#16a34a' : '#ef4444', background: t.status === 'running' ? '#f0fdf4' : '#fff1f2', padding: '0.2rem 0.6rem', borderRadius: '5px', textTransform: 'uppercase' }}>{t.status}</span></td>
+                              <td>
+                                 <span style={{ fontSize: '0.68rem', fontWeight: '900', color: t.status === 'running' ? '#16a34a' : '#ef4444', background: t.status === 'running' ? '#f0fdf4' : '#fff1f2', padding: '0.2rem 0.6rem', borderRadius: '5px', textTransform: 'uppercase' }}>{t.status}</span>
+                                 {t.scheduledLaunchAt && t.status !== 'running' && (
+                                   <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#6366f1', background: '#e0e7ff', padding: '0.15rem 0.5rem', borderRadius: '5px', marginLeft: '0.35rem' }}>
+                                     ⏰ Auto-launch: {new Date(t.scheduledLaunchAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                   </span>
+                                 )}
+                               </td>
                               <td><span style={{ fontSize: '0.65rem', fontWeight: '800', color: accessColor, background: accessColor + '15', padding: '0.2rem 0.5rem', borderRadius: '5px' }}>👥 {accessLabel}</span></td>
                               <td style={{ textAlign: 'right', paddingRight: '1.25rem' }}>
                                 <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end', alignItems: 'center' }}>
@@ -937,13 +984,83 @@ const AdminDashboard = () => {
                         })}
                       </tbody>
                     </table>
-                  )}
+                  </div>
+                )}
                 </div>
               </div>
             );
           })}
-        </div>
-      )}
+
+            {/* ── Module Pagination Controls ── */}
+            {days.length > MODULES_PER_PAGE && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', padding: '0.85rem 1.25rem', background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                <div style={{ fontSize: '0.825rem', color: '#64748b', fontWeight: '700' }}>
+                  Showing <span style={{ color: '#071125', fontWeight: '900' }}>{indexOfFirstModule + 1}</span> to <span style={{ color: '#071125', fontWeight: '900' }}>{Math.min(indexOfLastModule, days.length)}</span> of <span style={{ color: '#071125', fontWeight: '900' }}>{days.length}</span> modules
+                </div>
+                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                  <button
+                    disabled={modulePage === 1}
+                    onClick={() => setModulePage(prev => Math.max(prev - 1, 1))}
+                    style={{
+                      padding: '0.4rem 0.85rem',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      background: modulePage === 1 ? '#f8fafc' : 'white',
+                      color: modulePage === 1 ? '#94a3b8' : '#071125',
+                      fontWeight: '800',
+                      fontSize: '0.78rem',
+                      cursor: modulePage === 1 ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    ◀ Previous
+                  </button>
+
+                  {Array.from({ length: totalModulePages }, (_, i) => i + 1).map(pNum => (
+                    <button
+                      key={pNum}
+                      onClick={() => setModulePage(pNum)}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
+                        border: pNum === modulePage ? 'none' : '1px solid #cbd5e1',
+                        background: pNum === modulePage ? 'linear-gradient(135deg, #f97316, #ea580c)' : 'white',
+                        color: pNum === modulePage ? 'white' : '#475569',
+                        fontWeight: '900',
+                        fontSize: '0.88rem',
+                        cursor: 'pointer',
+                        boxShadow: pNum === modulePage ? '0 2px 8px rgba(249,115,22,0.3)' : 'none',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {pNum}
+                    </button>
+                  ))}
+
+                  <button
+                    disabled={modulePage === totalModulePages}
+                    onClick={() => setModulePage(prev => Math.min(prev + 1, totalModulePages))}
+                    style={{
+                      padding: '0.4rem 0.85rem',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      background: modulePage === totalModulePages ? '#f8fafc' : 'white',
+                      color: modulePage === totalModulePages ? '#94a3b8' : '#071125',
+                      fontWeight: '800',
+                      fontSize: '0.78rem',
+                      cursor: modulePage === totalModulePages ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Next ▶
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ══════════ RESOURCE HUB TAB ══════════ */}
       {adminTab === 'Resource Hub' && (
@@ -1559,7 +1676,7 @@ const AdminDashboard = () => {
       {/* ─── Task Modal ─── */}
       {showTaskModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '870px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+          <div className="modal-content" style={{ maxWidth: '680px', maxHeight: '86vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
               <h2 style={{ fontWeight: '900', color: 'var(--text-primary)', margin: 0 }}>{editingTask ? 'Edit Task' : 'Create Task'}</h2>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1602,6 +1719,18 @@ const AdminDashboard = () => {
                     <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#64748b', display: 'block', marginBottom: '0.4rem' }}>MAX ATTEMPTS</label>
                     <input type="number" value={tAttempts} onChange={e => setTAttempts(e.target.value)} className="input-field" required />
                   </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: '900', color: '#6366f1', display: 'block', marginBottom: '0.4rem' }}>
+                    ⏰ SCHEDULED AUTO-LAUNCH (OPTIONAL)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={tScheduledLaunchAt}
+                    onChange={e => setTScheduledLaunchAt(e.target.value)}
+                    className="input-field"
+                  />
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
@@ -1854,7 +1983,7 @@ const AdminDashboard = () => {
       {/* ─── Feedback Modal ─── */}
       {showFeedbackModal && (
         <div className="modal-overlay" style={{ zIndex: 10000 }}>
-          <div className="modal-content" style={{ maxWidth: '600px', padding: 0, overflow: 'hidden' }}>
+          <div className="modal-content" style={{ maxWidth: '640px', padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.5rem', background: '#071125', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Student Feedback</h3>
               <X onClick={() => setShowFeedbackModal(false)} style={{ cursor: 'pointer' }} size={24} />
@@ -1874,7 +2003,7 @@ const AdminDashboard = () => {
       {/* ─── Push to Hub Modal ─── */}
       {showPushModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
+          <div className="modal-content" style={{ maxWidth: '640px' }}>
             <div className="modal-header">
               <h2>Push to Resource Hub</h2>
               <button className="btn-icon" onClick={() => setShowPushModal(false)}><X size={20} /></button>
@@ -1902,7 +2031,7 @@ const AdminDashboard = () => {
       {/* ─── Clone Modal ─── */}
       {showCloneModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
+          <div className="modal-content" style={{ maxWidth: '640px' }}>
             <div className="modal-header">
               <h2>Clone Task to Module</h2>
               <button className="btn-icon" onClick={() => setShowCloneModal(false)}><X size={20} /></button>
@@ -1929,7 +2058,7 @@ const AdminDashboard = () => {
       {/* ─── Selected Report Detail Modal ─── */}
       {selectedReport && (
         <div className="modal-overlay" style={{ zIndex: 11000 }}>
-          <div className="modal-content" style={{ maxWidth: '800px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+          <div className="modal-content" style={{ maxWidth: '680px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: '#071125' }}>Attempt Detail Audit</h2>

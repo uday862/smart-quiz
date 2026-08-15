@@ -2,20 +2,22 @@ import React, { useState, useEffect } from 'react';
 import API_BASE_URL from '../config';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { GraduationCap, ShieldCheck, User, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 
 const LoginPage = () => {
-
   const navigate = useNavigate();
   const { user, login, isAuthenticated } = useAuth();
   const [role, setRole] = useState('student');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   useEffect(() => {
     if (isAuthenticated) {
-      if (user.role === 'admin') navigate('/admin', { replace: true });
-      else if (user.role === 'student') navigate('/student', { replace: true });
+      if (user?.role === 'admin') navigate('/admin', { replace: true });
+      else if (user?.role === 'student') navigate('/student', { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -26,6 +28,7 @@ const LoginPage = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
@@ -41,6 +44,7 @@ const LoginPage = () => {
       
       if (!res.ok) {
         showToast(data.message || 'Verification Failed', 'error');
+        setLoading(false);
         return;
       }
       
@@ -49,68 +53,122 @@ const LoginPage = () => {
 
     } catch (err) {
       showToast('Network error. Is server running?', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <h1 style={{ textAlign: 'center', color: 'var(--primary-color)', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '2rem' }}>SMARTQUIZ</h1>
-        <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '0.875rem' }}>Precision Assessment Platform</p>
-        
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          
-          <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', marginBottom: '0.5rem' }}>
-            <button 
-              type="button"
-              onClick={() => setRole('student')}
-              style={{ flex: 1, padding: '0.75rem', background: role === 'student' ? 'var(--primary-color)' : 'transparent', color: role === 'student' ? 'white' : 'var(--text-primary)', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              Student Portal
-            </button>
-            <button 
-              type="button"
-              onClick={() => setRole('admin')}
-              style={{ flex: 1, padding: '0.75rem', background: role === 'admin' ? 'var(--primary-color)' : 'transparent', color: role === 'admin' ? 'white' : 'var(--text-primary)', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              Control Center
-            </button>
-          </div>
+    <div className="clean-login-wrapper">
+      <div className="clean-login-card">
+        {/* Brand Header */}
+        <div className="clean-login-header">
+          <div className="clean-brand-logo">SMART QUIZ</div>
+          <p className="clean-brand-sub">Precision Assessment Platform</p>
+        </div>
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.8125rem', fontWeight: 'bold', color: '#64748b' }}>
+        {/* Role Selector Tabs */}
+        <div className="clean-role-toggle">
+          <button
+            type="button"
+            className={`clean-role-btn ${role === 'student' ? 'active' : ''}`}
+            onClick={() => { setRole('student'); setIdentifier(''); }}
+          >
+            <GraduationCap size={18} />
+            <span>Student Portal</span>
+          </button>
+          <button
+            type="button"
+            className={`clean-role-btn ${role === 'admin' ? 'active' : ''}`}
+            onClick={() => { setRole('admin'); setIdentifier(''); }}
+          >
+            <ShieldCheck size={18} />
+            <span>Control Center</span>
+          </button>
+        </div>
+
+        {/* Login Form */}
+        <form onSubmit={handleLogin} className="clean-login-form">
+          <div className="clean-input-group">
+            <label className="clean-label">
               {role === 'admin' ? 'ADMIN ACCESS KEY' : 'ROLL NUMBER'}
             </label>
-            <input 
-              type="text" 
-              className="input-field" 
-              value={identifier}
-              onChange={e => setIdentifier(e.target.value)}
-              placeholder={role === 'admin' ? 'Enter admin username' : 'roll no'}
-              required
-            />
+            <div className="clean-input-wrapper">
+              <span className="clean-input-icon">
+                {role === 'admin' ? <ShieldCheck size={18} /> : <User size={18} />}
+              </span>
+              <input
+                type="text"
+                className="clean-input"
+                value={identifier}
+                onChange={e => setIdentifier(e.target.value)}
+                placeholder={role === 'admin' ? 'Enter admin username' : 'Enter roll no (e.g. 22CS001)'}
+                required
+              />
+            </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.8125rem', fontWeight: 'bold', color: '#64748b' }}>PASSWORD</label>
-            <input 
-              type="password" 
-              className="input-field" 
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
+          <div className="clean-input-group">
+            <label className="clean-label">PASSWORD</label>
+            <div className="clean-input-wrapper">
+              <span className="clean-input-icon"><Lock size={18} /></span>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="clean-input"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+              <button
+                type="button"
+                className="clean-eye-btn"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex="-1"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
-          <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem', padding: '1rem', fontSize: '1.1rem', fontWeight: '900', letterSpacing: '1px' }}>
-            ENTER PORTAL
+          <button
+            type="submit"
+            disabled={loading}
+            className={`clean-submit-btn ${role === 'admin' ? 'admin' : 'student'}`}
+          >
+            {loading ? 'AUTHENTICATING...' : (
+              <>
+                <LogIn size={18} />
+                <span>SIGN IN TO {role === 'admin' ? 'CONTROL CENTER' : 'STUDENT PORTAL'}</span>
+              </>
+            )}
           </button>
         </form>
+
+        {/* Quick Demo Options */}
+        <div className="clean-demo-section">
+          <span className="clean-demo-title">Quick Demo Access:</span>
+          <div className="clean-demo-buttons">
+            <button
+              type="button"
+              onClick={() => { setRole('student'); setIdentifier('22CS001'); setPassword('alice123'); }}
+              className="clean-demo-btn"
+            >
+              🎓 Student Demo
+            </button>
+            <button
+              type="button"
+              onClick={() => { setRole('admin'); setIdentifier('admin'); setPassword('admin123'); }}
+              className="clean-demo-btn admin"
+            >
+              ⚡ Admin Demo
+            </button>
+          </div>
+        </div>
       </div>
 
       {toast.show && (
-        <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', padding: '1rem 2.5rem', background: toast.type === 'success' ? '#16a34a' : '#ef4444', color: 'white', borderRadius: '8px', fontWeight: 'bold', zIndex: 9999, boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
+        <div className={`clean-toast ${toast.type}`}>
           {toast.message}
         </div>
       )}

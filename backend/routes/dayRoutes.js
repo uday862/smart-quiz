@@ -45,6 +45,31 @@ router.get('/', requireAuth, async (req, res) => {
     }
 });
 
+// Bulk update status for all tasks in a day (Launch All / Stop All)
+router.put('/:id/bulk-status', requireAdmin, async (req, res) => {
+    try {
+        const { status } = req.body;
+        if (!['running', 'stopped'].includes(status)) {
+            return res.status(400).json({ message: 'Invalid status' });
+        }
+        const updateData = { status };
+        if (status === 'running') {
+            updateData.start_time = new Date();
+            updateData.end_time = new Date(Date.now() + 86400000);
+        }
+        const result = await Exam.updateMany(
+            { dayId: req.params.id, isDeleted: { $ne: true } },
+            { $set: updateData }
+        );
+        res.json({ 
+            message: `All tasks in module ${status === 'running' ? 'Launched' : 'Stopped'} successfully`,
+            modifiedCount: result.modifiedCount 
+        });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
 // Restart a full day
 router.put('/:id/restart', requireAdmin, async (req, res) => {
     try {

@@ -8,7 +8,8 @@ exports.requireAuth = (req, res, next) => {
         }
 
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+        const JWT_SECRET = process.env.JWT_SECRET || 'smartquiz_secret_key_2026';
+        const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded;
         next();
     } catch (err) {

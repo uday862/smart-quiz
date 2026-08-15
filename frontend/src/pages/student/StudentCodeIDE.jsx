@@ -171,6 +171,43 @@ const StudentQuizMode = () => {
     };
   }, [exam, submitted]);
 
+  const handleSubmitRef = useRef(null);
+
+  // ── Prevent Unintended Leave / Back Button Navigation ──
+  useEffect(() => {
+    if (submitted) return;
+
+    // Hide top navbar while writing active exam
+    window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: true } }));
+
+    // Push history state immediately on mount so browser back button can be intercepted
+    window.history.pushState({ activeExam: true }, '', window.location.href);
+
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '⚠️ Warning: You have an active assessment in progress. Your answers will be submitted automatically if you leave!';
+      return e.returnValue;
+    };
+
+    const handlePopState = (e) => {
+      const confirmLeave = window.confirm('⚠️ WARNING: Are you sure you want to go back? Leaving this page will submit your current exam progress!');
+      if (!confirmLeave) {
+        window.history.pushState({ activeExam: true }, '', window.location.href);
+      } else {
+        if (handleSubmitRef.current) handleSubmitRef.current(null, { forceSpam: false });
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+      window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: false } }));
+    };
+  }, [submitted]);
+
   useEffect(() => {
     const activeUser = JSON.parse(localStorage.getItem('user'));
     setUser(activeUser);
@@ -182,12 +219,11 @@ const StudentQuizMode = () => {
 
     const initQuiz = async () => {
       try {
-        // Fetch Exam
-        const res = await fetch(`${API_BASE_URL}/api/exams`);
-        const exams = await res.json();
-        const found = exams.find(e => e._id === id);
+        // Fetch Exam directly by ID
+        const res = await fetch(`${API_BASE_URL}/api/exams/${id}`);
+        const found = await res.json();
         
-        if (found) {
+        if (found && found._id) {
           // Check past attempts
           const attemptRes = await fetch(`${API_BASE_URL}/api/attempts/exam/${found._id}/student/${activeUser.id}`);
           const pastAttempts = await attemptRes.json();
@@ -207,9 +243,13 @@ const StudentQuizMode = () => {
           // FIRE START ATTEMPT
           let startData;
           try {
+            const authToken = localStorage.getItem('token');
             const startRes = await fetch(`${API_BASE_URL}/api/attempts/start`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+              },
               body: JSON.stringify({
                 student: activeUser.id,
                 exam: found._id,
@@ -359,12 +399,16 @@ const StudentQuizMode = () => {
     // Save to DB via PUT
     try {
       const currentAttemptId = activeAttemptIdRef.current;
+      const authToken = localStorage.getItem('token');
       let finalScore = 0;
       let passStatus = false;
       if (currentAttemptId) {
         const res = await fetch(`${API_BASE_URL}/api/attempts/${currentAttemptId}/submit`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+          },
           body: JSON.stringify({
             score: 0,
             flags: flagsRef.current,
@@ -402,6 +446,10 @@ const StudentQuizMode = () => {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  }, [handleSubmit]);
 
   if (!exam) return <div className="page-container" style={{ textAlign: 'center', marginTop: '4rem' }}>Loading Exam...</div>;
 

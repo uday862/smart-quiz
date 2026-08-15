@@ -301,7 +301,7 @@ router.get('/student/:studentId', requireAuth, async (req, res) => {
 
         if (req.user.role !== 'admin') {
             attempts.forEach(att => {
-                if (att.exam && att.exam.questions) {
+                if (att.status !== 'completed' && att.exam && att.exam.questions) {
                     att.exam.questions.forEach(q => {
                         delete q.correct_answer;
                     });

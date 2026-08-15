@@ -428,8 +428,13 @@ const StudentJumbleQuiz = () => {
 
         let sd;
         try {
+          const authToken = localStorage.getItem('token');
           const sr = await fetch(`${API_BASE_URL}/api/attempts/start`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+            },
             body: JSON.stringify({ student: activeUser.id, exam: found._id, ipAddress: '0.0.0.0' })
           });
           sd = await sr.json();
@@ -517,6 +522,43 @@ const StudentJumbleQuiz = () => {
 
   // Cheating detection removed as requested
 
+  const handleSubmitRef = useRef(null);
+
+  // ── Prevent Unintended Leave / Back Button Navigation ──
+  useEffect(() => {
+    if (submitted) return;
+
+    // Hide top navbar while writing active exam
+    window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: true } }));
+
+    // Push history state immediately on mount so browser back button can be intercepted
+    window.history.pushState({ activeExam: true }, '', window.location.href);
+
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '⚠️ Warning: You have an active assessment in progress. Your answers will be submitted automatically if you leave!';
+      return e.returnValue;
+    };
+
+    const handlePopState = (e) => {
+      const confirmLeave = window.confirm('⚠️ WARNING: Are you sure you want to go back? Leaving this page will submit your current exam progress!');
+      if (!confirmLeave) {
+        window.history.pushState({ activeExam: true }, '', window.location.href);
+      } else {
+        if (handleSubmitRef.current) handleSubmitRef.current({ forceSpam: false });
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+      window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: false } }));
+    };
+  }, [submitted]);
+
   const fmt = (s) => {
     if (s === null || s === undefined) return '--:--';
     return `${Math.floor(s / 60)}:${(s % 60 < 10 ? '0' : '')}${s % 60}`;
@@ -536,10 +578,15 @@ const StudentJumbleQuiz = () => {
 
     try {
       const currentAttemptId = activeAttemptIdRef.current;
+      const authToken = localStorage.getItem('token');
       let finalScore = 0;
       if (currentAttemptId) {
         const res = await fetch(`${API_BASE_URL}/api/attempts/${currentAttemptId}/submit`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+          },
           body: JSON.stringify({
             score: 0, flags: flagsRef.current, status: 'completed',
             spam: !!options?.forceSpam,
@@ -569,6 +616,10 @@ const StudentJumbleQuiz = () => {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  }, [handleSubmit]);
 
   if (!exam) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', flexDirection: 'column', gap: '1rem' }}>

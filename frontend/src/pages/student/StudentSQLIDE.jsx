@@ -238,9 +238,13 @@ const StudentSQLIDE = () => {
                 let startData;
                 let activeHasDraft = false;
                 try {
+                    const authToken = localStorage.getItem('token');
                     const startRes = await fetch(`${API_BASE_URL}/api/attempts/start`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                        },
                         body: JSON.stringify({ student: user.id, exam: found._id, dayId: found.dayId })
                     });
                     if (startRes.ok) {
@@ -328,6 +332,43 @@ const StudentSQLIDE = () => {
             window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: false } }));
         };
     }, [id, dbId]);
+
+    const handleSubmitRef = useRef(null);
+
+    // ── Prevent Unintended Leave / Back Button Navigation ──
+    useEffect(() => {
+        if (isCompleted) return;
+
+        // Hide top navbar while writing active exam
+        window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: true } }));
+
+        // Push history state immediately on mount so browser back button can be intercepted
+        window.history.pushState({ activeExam: true }, '', window.location.href);
+
+        const handleBeforeUnload = (e) => {
+            e.preventDefault();
+            e.returnValue = '⚠️ Warning: You have an active assessment in progress. Your answers will be submitted automatically if you leave!';
+            return e.returnValue;
+        };
+
+        const handlePopState = (e) => {
+            const confirmLeave = window.confirm('⚠️ WARNING: Are you sure you want to go back? Leaving this page will submit your current exam progress!');
+            if (!confirmLeave) {
+                window.history.pushState({ activeExam: true }, '', window.location.href);
+            } else {
+                if (handleSubmitRef.current) handleSubmitRef.current({ forceComplete: true });
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        window.addEventListener('popstate', handlePopState);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            window.removeEventListener('popstate', handlePopState);
+            window.dispatchEvent(new CustomEvent('active_exam_config', { detail: { fullWindow: false } }));
+        };
+    }, [isCompleted]);
 
     useEffect(() => {
         if (exam && exam.fullWindow && !submitted) {
@@ -463,10 +504,13 @@ const StudentSQLIDE = () => {
         setSubmitting(true);
         try {
             let targetAttemptId = activeAttemptId;
+            const authToken = localStorage.getItem('token');
+            const authHeader = authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+
             if (!targetAttemptId) {
                 const startRes = await fetch(`${API_BASE_URL}/api/attempts/start`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...authHeader },
                     body: JSON.stringify({ student: user.id, exam: exam._id })
                 });
                 const attemptData = await startRes.json();
@@ -480,7 +524,7 @@ const StudentSQLIDE = () => {
             // Step 2: Submit Completion
             const res = await fetch(`${API_BASE_URL}/api/attempts/${targetAttemptId}/submit`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeader },
                 body: JSON.stringify({
                     score: isPassed, 
                     status: newStatus,
@@ -514,6 +558,10 @@ const StudentSQLIDE = () => {
             setSubmitting(false);
         }
     };
+
+    useEffect(() => {
+        handleSubmitRef.current = handleSubmitAttempt;
+    }, [handleSubmitAttempt]);
 
     if (loading) return <div style={{ padding: '5rem', textAlign: 'center' }}>Initializing SQL Environment...</div>;
     if (!exam) return <div style={{ padding: '5rem', textAlign: 'center', color: 'red' }}>Environment Failed to Load</div>;

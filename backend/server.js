@@ -20,7 +20,8 @@ app.use(cors());
 app.use(express.json());
 
 // Database connection
-mongoose.connect(process.env.MONGO_URI)
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/smartquiz';
+mongoose.connect(MONGO_URI)
   .then(async () => {
     console.log('MongoDB Connected');
     try {
@@ -61,10 +62,31 @@ io.on('connection', (socket) => {
         io.emit('admin_dashboard_update', data);
     });
 
-    socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
-    });
 });
+
+// Background interval for Scheduled Auto-Launch Tasks (checks every 20 seconds)
+setInterval(async () => {
+    try {
+        const Exam = require('./models/Exam');
+        const now = new Date();
+        const scheduledExams = await Exam.find({
+            status: { $ne: 'running' },
+            isDeleted: { $ne: true },
+            scheduledLaunchAt: { $lte: now }
+        });
+        if (scheduledExams.length > 0) {
+            console.log(`Auto-launching ${scheduledExams.length} scheduled task(s)...`);
+            for (const exam of scheduledExams) {
+                exam.status = 'running';
+                exam.start_time = now;
+                exam.end_time = new Date(now.getTime() + 86400000);
+                await exam.save();
+            }
+        }
+    } catch (err) {
+        console.error('Scheduled launch check error:', err.message);
+    }
+}, 20000);
 
 // Routes Placeholder
 app.use('/api/auth', require('./routes/authRoutes'));
