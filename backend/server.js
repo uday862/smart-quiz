@@ -21,30 +21,32 @@ app.use(express.json());
 
 // Database connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/smartquiz';
-mongoose.connect(MONGO_URI)
-  .then(async () => {
-    console.log('MongoDB Connected');
-    try {
-        await mongoose.connection.collection('users').dropIndex('email_1');
-        console.log('Dropped email_1 index to fix dup key errors');
-    } catch(e) { /* might not exist or already dropped, ignore */ }
-    // Drop old unique index on dayNumber if it still exists
-    try {
-        await mongoose.connection.collection('days').dropIndex('dayNumber_1');
-        console.log('Dropped dayNumber_1 unique index to fix Add Module');
-    } catch(e) { /* already dropped or never existed */ }
-    // Seed admin if not exists
-    const User = require('./models/User');
-    const bcrypt = require('bcryptjs');
-    const adminExists = await User.findOne({ role: 'admin' });
-    if (!adminExists) {
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash('admin', salt);
-        await User.create({ name: 'admin', password: hashedPassword, role: 'admin' });
-        console.log('Default admin seeded (admin/admin)');
-    }
-  })
-  .catch(err => console.log(err));
+if (mongoose.connection.readyState === 0) {
+  mongoose.connect(MONGO_URI)
+    .then(async () => {
+      console.log('MongoDB Connected');
+      try {
+          await mongoose.connection.collection('users').dropIndex('email_1');
+          console.log('Dropped email_1 index to fix dup key errors');
+      } catch(e) { /* might not exist or already dropped, ignore */ }
+      // Drop old unique index on dayNumber if it still exists
+      try {
+          await mongoose.connection.collection('days').dropIndex('dayNumber_1');
+          console.log('Dropped dayNumber_1 unique index to fix Add Module');
+      } catch(e) { /* already dropped or never existed */ }
+      // Seed admin if not exists
+      const User = require('./models/User');
+      const bcrypt = require('bcryptjs');
+      const adminExists = await User.findOne({ role: 'admin' });
+      if (!adminExists) {
+          const salt = await bcrypt.genSalt(10);
+          const hashedPassword = await bcrypt.hash('admin', salt);
+          await User.create({ name: 'admin', password: hashedPassword, role: 'admin' });
+          console.log('Default admin seeded (admin/admin)');
+      }
+    })
+    .catch(err => console.log(err));
+}
 
 
 // Inject io into req for routes
@@ -102,14 +104,18 @@ app.use('/api/resource-folders', require('./routes/resourceFolderRoutes'));
 
 const PORT = process.env.PORT || 5001;
 
-// Serve static assets in production
+// Serve static assets in production (when not on VERCEL platform)
 const path = require('path');
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
   app.use(express.static(path.join(__dirname, '../frontend/dist')));
   app.get('*path', (req, res) => {
     res.sendFile(path.resolve(__dirname, '../frontend', 'dist', 'index.html'));
   });
 }
 
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+if (require.main === module) {
+  server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+module.exports = app;
 
